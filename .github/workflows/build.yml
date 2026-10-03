@@ -27,7 +27,17 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload Build Reports on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-reports
+          path: |
+            app/build/reports/
+            **/build/reports/
+          retention-days: 3
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

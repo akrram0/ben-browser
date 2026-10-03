@@ -27,7 +27,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -164,7 +169,7 @@ fun AppleBottomBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = AppleIcons.Search,
+                            imageVector = Icons.Filled.Search,
                             contentDescription = "Search",
                             tint = TextSecondary,
                             modifier = Modifier.size(16.dp)
@@ -288,7 +293,7 @@ fun AppleBottomBar(
                         ) {
                             if (state.isStartPage) {
                                 Icon(
-                                    imageVector = AppleIcons.Search,
+                                    imageVector = Icons.Filled.Search,
                                     contentDescription = "Search",
                                     tint = TextSecondary,
                                     modifier = Modifier.size(14.dp)
@@ -305,7 +310,7 @@ fun AppleBottomBar(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = AppleIcons.Lock,
+                                    imageVector = Icons.Filled.Lock,
                                     contentDescription = "Secure",
                                     tint = TextSecondary,
                                     modifier = Modifier.size(12.dp)
@@ -345,9 +350,9 @@ fun AppleBottomBar(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = if (state.isCurrentBookmarked) AppleIcons.BookmarkFilled else AppleIcons.BookmarkOutline,
+                            imageVector = Icons.Filled.Star,
                             contentDescription = "Toggle Bookmark",
-                            tint = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
+                            tint = if (state.isCurrentBookmarked) AccentBlue else TextSecondary,
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -360,7 +365,7 @@ fun AppleBottomBar(
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = AppleIcons.Home,
+                                imageVector = Icons.Filled.Home,
                                 contentDescription = "Home",
                                 modifier = Modifier.size(19.dp)
                             )
@@ -374,7 +379,7 @@ fun AppleBottomBar(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = AppleIcons.BookmarksList,
+                            imageVector = Icons.Filled.Menu,
                             contentDescription = "Bookmarks",
                             modifier = Modifier.size(19.dp)
                         )
