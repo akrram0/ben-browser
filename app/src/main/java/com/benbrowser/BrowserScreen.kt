@@ -1,8 +1,10 @@
 package com.benbrowser
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -78,117 +80,136 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Content container captured as Haze source for liquid glass effect
+        // Live Web Content with Status Bar & Navigation Bar Insets Protection
         Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(bottom = 72.dp)
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+
+                        setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
+                        } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                            @Suppress("DEPRECATION")
+                            WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
+                        }
+
+                        // Enable cookies
+                        CookieManager.getInstance().apply {
+                            setAcceptCookie(true)
+                            setAcceptThirdPartyCookies(this@apply, true)
+                        }
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            // Remove '; wv' so search engines and web apps don't reject WebView
+                            userAgentString = userAgentString.replace("; wv", "")
+                        }
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                viewModel.onPageStarted(url)
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                viewModel.onPageFinished(url)
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
+
+                            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
+
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                val url = request?.url?.toString() ?: return false
+                                return if (url.startsWith("http://") || url.startsWith("https://")) {
+                                    false
+                                } else {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, request.url)
+                                        view?.context?.startActivity(intent)
+                                        true
+                                    } catch (_: Exception) {
+                                        true
+                                    }
+                                }
+                            }
+                        }
+
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                viewModel.onProgressChanged(newProgress)
+                            }
+
+                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                viewModel.onReceivedTitle(title)
+                            }
+                        }
+
+                        if (state.currentUrl.isNotBlank()) {
+                            loadUrl(state.currentUrl)
+                        }
+
+                        webViewInstance = this
+                    }
+                },
+                update = { view ->
+                    webViewInstance = view
+                    if (!state.isStartPage && state.currentUrl.isNotBlank() && view.url != state.currentUrl) {
+                        view.loadUrl(state.currentUrl)
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Safari Start Page (Favorites, Quick Links) captured by hazeSource when visible
+        AnimatedVisibility(
+            visible = state.isStartPage,
+            enter = fadeIn(animationSpec = tween(250)),
+            exit = fadeOut(animationSpec = tween(200)),
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(state = hazeState)
         ) {
-            // Live Web Content with Status Bar Insets Protection
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(bottom = 72.dp) // Provide clearance so bottom bar doesn't obscure content
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-
-                            setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
-                            } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                                @Suppress("DEPRECATION")
-                                WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
-                            }
-
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                databaseEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                builtInZoomControls = true
-                                displayZoomControls = false
-                                cacheMode = WebSettings.LOAD_DEFAULT
-                            }
-
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                    viewModel.onPageStarted(url)
-                                    viewModel.updateNavigationState(
-                                        canGoBack = view?.canGoBack() ?: false,
-                                        canGoForward = view?.canGoForward() ?: false
-                                    )
-                                }
-
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    viewModel.onPageFinished(url)
-                                    viewModel.updateNavigationState(
-                                        canGoBack = view?.canGoBack() ?: false,
-                                        canGoForward = view?.canGoForward() ?: false
-                                    )
-                                }
-
-                                override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
-                                    viewModel.updateNavigationState(
-                                        canGoBack = view?.canGoBack() ?: false,
-                                        canGoForward = view?.canGoForward() ?: false
-                                    )
-                                }
-
-                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    return false
-                                }
-                            }
-
-                            webChromeClient = object : WebChromeClient() {
-                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                    viewModel.onProgressChanged(newProgress)
-                                }
-
-                                override fun onReceivedTitle(view: WebView?, title: String?) {
-                                    viewModel.onReceivedTitle(title)
-                                }
-                            }
-
-                            if (state.currentUrl.isNotBlank()) {
-                                loadUrl(state.currentUrl)
-                            }
-
-                            webViewInstance = this
-                        }
-                    },
-                    update = { view ->
-                        webViewInstance = view
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            // Safari Start Page (Favorites, Quick Links) with smooth crossfade
-            AnimatedVisibility(
-                visible = state.isStartPage,
-                enter = fadeIn(animationSpec = tween(250)),
-                exit = fadeOut(animationSpec = tween(200))
-            ) {
-                AppleStartPage(
-                    bookmarks = state.bookmarks,
-                    onSelectBookmark = { url ->
-                        viewModel.loadUrl(url)
-                        webViewInstance?.loadUrl(url)
-                    },
-                    onSearchClick = {
-                        viewModel.setEditingUrl(true)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            AppleStartPage(
+                bookmarks = state.bookmarks,
+                onSelectBookmark = { url ->
+                    viewModel.loadUrl(url)
+                },
+                onSearchClick = {
+                    viewModel.setEditingUrl(true)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         // Apple Safari Floating Liquid Glass Bottom Bar
@@ -234,7 +255,6 @@ fun BrowserScreen(
                 },
                 onSelectBookmark = { url ->
                     viewModel.loadUrl(url)
-                    webViewInstance?.loadUrl(url)
                 },
                 onDeleteBookmark = { id ->
                     viewModel.removeBookmark(id)
