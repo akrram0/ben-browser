@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Assemble Debug
@@ -29,15 +32,17 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Build Reports on Failure
+      - name: Publish Error Log to debug-logs Branch
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-reports
-          path: |
-            app/build/reports/
-            **/build/reports/
-          retention-days: 3
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B debug-logs
+          mkdir -p .debug-logs
+          ./gradlew assembleDebug --stacktrace > .debug-logs/gradle.log 2>&1 || true
+          git add -f .debug-logs
+          git commit -m "chore: save build failure log" || true
+          git push -f origin debug-logs || true
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
