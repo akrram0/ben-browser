@@ -38,6 +38,7 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
@@ -50,7 +51,7 @@ dependencies {
     // Modern AndroidX WebKit for WebViewFeature & algorithmic darkening
     implementation("androidx.webkit:webkit:1.12.1")
 
-    // Haze 2.0.1 for hardware-accelerated blur / glass effects
+    // Haze 2.0.1 for visual effects
     implementation("dev.chrisbanes.haze:haze:2.0.1")
     implementation("dev.chrisbanes.haze:haze-blur:2.0.1")
 }
