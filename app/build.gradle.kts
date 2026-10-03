@@ -40,7 +40,16 @@ android {
     }
 }
 
+// Force stable AndroidX Core 1.15.0 to prevent Haze 2.0.1's transitive 1.19.1 from triggering AGP 9.1.0 check
+configurations.all {
+    resolutionStrategy {
+        force("androidx.core:core:1.15.0")
+        force("androidx.core:core-ktx:1.15.0")
+    }
+}
+
 dependencies {
+    implementation("androidx.core:core:1.15.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
 
@@ -57,5 +66,8 @@ dependencies {
 
     // Haze 2.0.1 for hardware-accelerated blur / glass effects
     implementation("dev.chrisbanes.haze:haze:2.0.1")
-    implementation("dev.chrisbanes.haze:haze-blur:2.0.1")
+    implementation("dev.chrisbanes.haze:haze-blur:2.0.1") {
+        exclude(group = "androidx.core", module = "core-ktx")
+        exclude(group = "androidx.core", module = "core")
+    }
 }
