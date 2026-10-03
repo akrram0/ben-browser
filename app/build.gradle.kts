@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.benbrowser"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.benbrowser"
@@ -40,21 +40,8 @@ android {
     }
 }
 
-// Force stable AndroidX versions to prevent Haze 2.0.1's unconstrained transitives from pulling incompatible alpha artifacts
-configurations.all {
-    resolutionStrategy {
-        force("androidx.core:core:1.15.0")
-        force("androidx.core:core-ktx:1.15.0")
-        force("androidx.activity:activity:1.9.3")
-        force("androidx.activity:activity-ktx:1.9.3")
-        force("androidx.activity:activity-compose:1.9.3")
-    }
-}
-
 dependencies {
-    implementation("androidx.core:core:1.15.0")
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.activity:activity:1.9.3")
     implementation("androidx.activity:activity-compose:1.9.3")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
@@ -68,13 +55,7 @@ dependencies {
     // Modern AndroidX WebKit for WebViewFeature & algorithmic darkening
     implementation("androidx.webkit:webkit:1.12.1")
 
-    // Haze 2.0.1 for hardware-accelerated blur / glass effects with clean dependency bounds
-    implementation("dev.chrisbanes.haze:haze:2.0.1") {
-        exclude(group = "androidx.activity")
-        exclude(group = "androidx.core")
-    }
-    implementation("dev.chrisbanes.haze:haze-blur:2.0.1") {
-        exclude(group = "androidx.activity")
-        exclude(group = "androidx.core")
-    }
+    // Haze 2.0.1 for hardware-accelerated blur / glass effects
+    implementation("dev.chrisbanes.haze:haze:2.0.1")
+    implementation("dev.chrisbanes.haze:haze-blur:2.0.1")
 }
