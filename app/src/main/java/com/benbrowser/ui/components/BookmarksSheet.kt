@@ -24,19 +24,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.benbrowser.R
 import com.benbrowser.data.Bookmark
 import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.GlassBorder
@@ -47,15 +47,17 @@ import com.benbrowser.theme.TextSecondary
 @Composable
 fun BookmarksSheet(
     bookmarks: List<Bookmark>,
+    isCurrentBookmarked: Boolean,
+    currentUrl: String,
+    onToggleBookmark: () -> Unit,
+    onOpenStartPage: () -> Unit,
     onSelectBookmark: (String) -> Unit,
     onDeleteBookmark: (String) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    modifier: Modifier = Modifier
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
         containerColor = Color(0xFF16181D),
         dragHandle = {
             Box(
@@ -86,7 +88,7 @@ fun BookmarksSheet(
             ) {
                 Text(
                     text = "Bookmarks",
-                    fontSize = 20.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Default,
                     color = TextPrimary
@@ -103,11 +105,86 @@ fun BookmarksSheet(
                 )
             }
 
+            // Quick Actions: Bookmark Current Page & Return to Start Page
+            if (currentUrl.isNotBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF22242B))
+                        .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onToggleBookmark)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (isCurrentBookmarked) R.drawable.ic_apple_star_filled else R.drawable.ic_apple_star
+                        ),
+                        contentDescription = "Bookmark",
+                        tint = if (isCurrentBookmarked) AccentBlue else TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = if (isCurrentBookmarked) "Remove from Bookmarks" else "Bookmark This Page",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isCurrentBookmarked) AccentBlue else TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Start Page shortcut
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E2026))
+                    .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
+                    .clickable {
+                        onOpenStartPage()
+                        onDismiss()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_apple_book),
+                    contentDescription = "Favorites",
+                    tint = AccentBlue,
+                    modifier = Modifier.size(18.dp)
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    text = "Favorites & Start Page",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Text(
+                text = "SAVED BOOKMARKS",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+            )
+
             if (bookmarks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
+                        .height(140.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -156,7 +233,6 @@ private fun BookmarkItemRow(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Initial badge
         val initial = bookmark.title.trim().take(1).uppercase().ifBlank { "?" }
         Box(
             modifier = Modifier
@@ -175,7 +251,6 @@ private fun BookmarkItemRow(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Title and URL
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -197,7 +272,6 @@ private fun BookmarkItemRow(
             )
         }
 
-        // Delete button
         IconButton(
             onClick = onDelete,
             modifier = Modifier.size(32.dp)

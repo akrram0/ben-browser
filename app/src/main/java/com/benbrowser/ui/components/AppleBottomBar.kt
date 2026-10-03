@@ -24,15 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -53,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -64,24 +57,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.benbrowser.R
 import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.DisabledTint
 import com.benbrowser.theme.GlassBorder
-import com.benbrowser.theme.GlassSurfaceFallback
 import com.benbrowser.theme.InputFieldBg
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.benbrowser.ui.BrowserState
+import dev.chrisbanes.haze.ExperimentalHazeApi
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.glass.GlassStyle
+import dev.chrisbanes.haze.glass.hazeGlass
 
+@OptIn(ExperimentalHazeApi::class)
 @Composable
 fun AppleBottomBar(
     state: BrowserState,
+    hazeState: HazeState,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
-    onHome: () -> Unit,
     onSubmitUrl: (String) -> Unit,
-    onToggleBookmark: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -90,7 +88,6 @@ fun AppleBottomBar(
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
 
-    // Internal text field value for selection & typing
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(state.currentUrl))
     }
@@ -125,14 +122,14 @@ fun AppleBottomBar(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Subtle embedded progress indicator right above bar when page is loading
+            // Embedded progress indicator right above bar when page is loading
             AnimatedVisibility(
                 visible = state.isLoading && state.progress < 1f && !state.isStartPage,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
-                    .padding(bottom = 4.dp)
+                    .padding(bottom = 6.dp)
             ) {
                 LinearProgressIndicator(
                     progress = { state.progress },
@@ -145,31 +142,37 @@ fun AppleBottomBar(
                 )
             }
 
-            // Safari Floating Glass Capsule
+            // Safari Liquid Glass Bar using Haze hazeGlass
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(56.dp)
                     .clip(CircleShape)
-                    .background(GlassSurfaceFallback, CircleShape)
+                    .hazeGlass(
+                        input = HazeInput.Sources(hazeState),
+                        style = GlassStyle.regular.then {
+                            shape(CircleShape)
+                            tint(Color(0x3316181D))
+                        }
+                    )
+                    .background(Color(0x7316181D), CircleShape)
                     .border(BorderStroke(1.dp, GlassBorder), CircleShape)
-                    .padding(horizontal = 6.dp),
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // If in full URL editing mode, show cancel on left or clean input
                 if (state.isEditingUrl) {
-                    // In editing mode: clean expanded text capsule with Go and Cancel
+                    // Full URL editing mode
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .height(40.dp)
+                            .height(42.dp)
                             .clip(CircleShape)
                             .background(InputFieldBg)
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Search,
+                            painter = painterResource(R.drawable.ic_apple_search),
                             contentDescription = "Search",
                             tint = TextSecondary,
                             modifier = Modifier.size(16.dp)
@@ -222,13 +225,12 @@ fun AppleBottomBar(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                    // Cancel button
                     Text(
                         text = "Cancel",
                         color = AccentBlue,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier
                             .clickable {
@@ -239,9 +241,9 @@ fun AppleBottomBar(
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     )
                 } else {
-                    // Normal Browsing Mode: Back, Forward, Address Pill, Bookmarks, Star, Menu
+                    // Apple Safari Browsing Layout: [ < ] [ > ] [   🔒 domain.com   ↻   ] [ 📖 ]
 
-                    // Back Button
+                    // Back Chevron (Apple SF symbol)
                     IconButton(
                         onClick = onBack,
                         enabled = state.canGoBack || !state.isStartPage,
@@ -249,16 +251,16 @@ fun AppleBottomBar(
                             contentColor = TextPrimary,
                             disabledContentColor = DisabledTint
                         ),
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            painter = painterResource(R.drawable.ic_apple_back),
                             contentDescription = "Back",
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    // Forward Button
+                    // Forward Chevron (Apple SF symbol)
                     IconButton(
                         onClick = onForward,
                         enabled = state.canGoForward,
@@ -266,25 +268,25 @@ fun AppleBottomBar(
                             contentColor = TextPrimary,
                             disabledContentColor = DisabledTint
                         ),
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            painter = painterResource(R.drawable.ic_apple_forward),
                             contentDescription = "Forward",
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    // Center Address / Domain Capsule
+                    // Dominant Address / Domain Capsule with plenty of breathing room
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp)
-                            .padding(horizontal = 4.dp)
+                            .height(40.dp)
+                            .padding(horizontal = 6.dp)
                             .clip(CircleShape)
                             .background(InputFieldBg)
                             .clickable { onEditUrl(true) }
-                            .padding(horizontal = 10.dp),
+                            .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -293,14 +295,14 @@ fun AppleBottomBar(
                         ) {
                             if (state.isStartPage) {
                                 Icon(
-                                    imageVector = Icons.Filled.Search,
+                                    painter = painterResource(R.drawable.ic_apple_search),
                                     contentDescription = "Search",
                                     tint = TextSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Search or enter URL",
+                                    text = "Search or enter website",
                                     fontSize = 15.sp,
                                     color = TextSecondary,
                                     fontWeight = FontWeight.Normal,
@@ -310,10 +312,10 @@ fun AppleBottomBar(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Filled.Lock,
+                                    painter = painterResource(R.drawable.ic_apple_lock),
                                     contentDescription = "Secure",
                                     tint = TextSecondary,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -326,62 +328,30 @@ fun AppleBottomBar(
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.weight(1f)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Icon(
-                                    imageVector = Icons.Filled.Refresh,
+                                    painter = painterResource(R.drawable.ic_apple_reload),
                                     contentDescription = "Reload",
                                     tint = TextSecondary,
                                     modifier = Modifier
-                                        .size(16.dp)
+                                        .size(15.dp)
                                         .clickable { onReload() }
                                 )
                             }
                         }
                     }
 
-                    // Bookmark Star Toggle
-                    IconButton(
-                        onClick = onToggleBookmark,
-                        enabled = !state.isStartPage && state.currentUrl.isNotBlank(),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
-                            disabledContentColor = DisabledTint
-                        ),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = "Toggle Bookmark",
-                            tint = if (state.isCurrentBookmarked) AccentBlue else TextSecondary,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    // Start Page / Home button or Reload
-                    if (!state.isStartPage) {
-                        IconButton(
-                            onClick = onHome,
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = TextPrimary),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Home,
-                                contentDescription = "Home",
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                    }
-
-                    // Bookmarks Library Sheet button
+                    // Apple Safari Bookmarks Book Icon
                     IconButton(
                         onClick = onOpenBookmarks,
                         colors = IconButtonDefaults.iconButtonColors(contentColor = TextPrimary),
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Menu,
+                            painter = painterResource(R.drawable.ic_apple_book),
                             contentDescription = "Bookmarks",
-                            modifier = Modifier.size(19.dp)
+                            tint = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

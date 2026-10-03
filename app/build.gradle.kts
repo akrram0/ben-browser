@@ -51,7 +51,8 @@ dependencies {
     // Modern AndroidX WebKit for WebViewFeature & algorithmic darkening
     implementation("androidx.webkit:webkit:1.12.1")
 
-    // Haze 2.0.1 for visual effects
+    // Haze 2.0.1 for visual effects & liquid glass
     implementation("dev.chrisbanes.haze:haze:2.0.1")
     implementation("dev.chrisbanes.haze:haze-blur:2.0.1")
+    implementation("dev.chrisbanes.haze:haze-glass:2.0.1")
 }
