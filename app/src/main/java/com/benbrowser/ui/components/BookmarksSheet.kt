@@ -1,8 +1,18 @@
 package com.benbrowser.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,10 +36,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -78,7 +91,7 @@ fun BookmarksSheet(
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
-            // Header: Title and Done button
+            // Header: Apple Safari title and Done action
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -105,17 +118,33 @@ fun BookmarksSheet(
                 )
             }
 
-            // Quick Actions: Bookmark Current Page & Return to Start Page
+            // Quick Actions: Bookmark Current Page
             if (currentUrl.isNotBlank()) {
+                val toggleInteraction = remember { MutableInteractionSource() }
+                val togglePressed by toggleInteraction.collectIsPressedAsState()
+                val toggleScale by animateFloatAsState(
+                    targetValue = if (togglePressed) 0.98f else 1f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "toggle_scale"
+                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 14.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .graphicsLayer {
+                            scaleX = toggleScale
+                            scaleY = toggleScale
+                        }
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF22242B))
-                        .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
-                        .clickable(onClick = onToggleBookmark)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp))
+                        .clickable(
+                            interactionSource = toggleInteraction,
+                            indication = null,
+                            onClick = onToggleBookmark
+                        )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -139,19 +168,34 @@ fun BookmarksSheet(
                 }
             }
 
-            // Start Page shortcut
+            // Quick Action: Return to Start Page
+            val homeInteraction = remember { MutableInteractionSource() }
+            val homePressed by homeInteraction.collectIsPressedAsState()
+            val homeScale by animateFloatAsState(
+                targetValue = if (homePressed) 0.98f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "home_scale"
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .graphicsLayer {
+                        scaleX = homeScale
+                        scaleY = homeScale
+                    }
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF1E2026))
-                    .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
-                    .clickable {
+                    .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp))
+                    .clickable(
+                        interactionSource = homeInteraction,
+                        indication = null
+                    ) {
                         onOpenStartPage()
                         onDismiss()
                     }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -223,14 +267,30 @@ private fun BookmarkItemRow(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val rowInteraction = remember { MutableInteractionSource() }
+    val rowPressed by rowInteraction.collectIsPressedAsState()
+    val rowScale by animateFloatAsState(
+        targetValue = if (rowPressed) 0.98f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "bookmark_row_scale"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .graphicsLayer {
+                scaleX = rowScale
+                scaleY = rowScale
+            }
+            .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF1E2026))
-            .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp))
+            .clickable(
+                interactionSource = rowInteraction,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val initial = bookmark.title.trim().take(1).uppercase().ifBlank { "?" }

@@ -1,8 +1,14 @@
 package com.benbrowser.ui.components
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,18 +30,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
-import com.benbrowser.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.benbrowser.R
 import com.benbrowser.data.Bookmark
 import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.BgCanvas
@@ -51,6 +61,14 @@ fun AppleStartPage(
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val searchInteraction = remember { MutableInteractionSource() }
+    val searchPressed by searchInteraction.collectIsPressedAsState()
+    val searchScale by animateFloatAsState(
+        targetValue = if (searchPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "search_pill_scale"
+    )
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -58,17 +76,25 @@ fun AppleStartPage(
             .statusBarsPadding()
             .padding(horizontal = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Safari-Style Hero Search Pill
+        // Safari-Style Hero Search Pill with tactile spring scale
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
+                .graphicsLayer {
+                    scaleX = searchScale
+                    scaleY = searchScale
+                }
                 .clip(CircleShape)
                 .background(InputFieldBg)
-                .border(1.dp, GlassBorder, CircleShape)
-                .clickable(onClick = onSearchClick)
+                .border(BorderStroke(1.dp, GlassBorder), CircleShape)
+                .clickable(
+                    interactionSource = searchInteraction,
+                    indication = null,
+                    onClick = onSearchClick
+                )
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -131,28 +157,54 @@ private fun FavoriteTile(
     bookmark: Bookmark,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "tile_scale"
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
     ) {
-        // Glass Icon Container (radius_md 16.dp)
+        // Glass Icon Container (radius_md 16.dp) with Apple Dark Slate Gradient
         Box(
             modifier = Modifier
                 .size(68.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1C1D22))
-                .border(1.dp, GlassBorder, RoundedCornerShape(16.dp)),
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF24262E),
+                            Color(0xFF16181D)
+                        )
+                    )
+                )
+                .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
             // Stylized initial badge in Apple typography
             val initial = bookmark.title.trim().take(1).uppercase().ifBlank { "?" }
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF2C2D35)),
+                    .background(Color(0xFF2C2E38)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
