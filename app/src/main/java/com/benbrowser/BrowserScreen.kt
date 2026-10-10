@@ -199,7 +199,7 @@ fun BrowserScreen(
             )
 
             // Safari Start Page Overlay (fast 120ms fade, no flash)
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = state.isStartPage,
                 enter = fadeIn(animationSpec = tween(120)),
                 exit = fadeOut(animationSpec = tween(120)),
