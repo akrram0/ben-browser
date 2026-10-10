@@ -18,7 +18,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -30,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.webkit.WebSettingsCompat
@@ -53,25 +51,22 @@ fun BrowserScreen(
     val hazeState = rememberHazeState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
-    // Synchronize URL navigation when ViewModel state changes
-    LaunchedEffect(state.currentUrl, state.isStartPage) {
-        if (!state.isStartPage && state.currentUrl.isNotBlank()) {
-            webViewInstance?.let { view ->
-                if (view.url != state.currentUrl) {
-                    view.loadUrl(state.currentUrl)
-                }
-            }
+    // Dispatch user-initiated URL loads once without interrupting in-page redirects
+    LaunchedEffect(state.pendingUrl, webViewInstance) {
+        val targetUrl = state.pendingUrl
+        val view = webViewInstance
+        if (!targetUrl.isNullOrBlank() && view != null) {
+            view.loadUrl(targetUrl)
+            viewModel.onUrlLoadConsumed()
         }
     }
 
     // System Back Handler: edit mode -> webView history -> start page -> exit
     BackHandler(enabled = !state.isStartPage || state.canGoBack || state.isEditingUrl) {
-        if (state.isEditingUrl) {
-            viewModel.setEditingUrl(false)
-        } else if (webViewInstance?.canGoBack() == true) {
-            webViewInstance?.goBack()
-        } else {
-            viewModel.openStartPage()
+        when {
+            state.isEditingUrl -> viewModel.setEditingUrl(false)
+            webViewInstance?.canGoBack() == true -> webViewInstance?.goBack()
+            else -> viewModel.openStartPage()
         }
     }
 
@@ -80,12 +75,11 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Live Web Content with Status Bar & Navigation Bar Insets Protection
+        // Content Layer (Full-bleed under floating glass bar)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(bottom = 72.dp)
+                .hazeSource(state = hazeState)
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -103,7 +97,6 @@ fun BrowserScreen(
                             WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
                         }
 
-                        // Enable cookies
                         val cookieManager = CookieManager.getInstance()
                         cookieManager.setAcceptCookie(true)
                         cookieManager.setAcceptThirdPartyCookies(this, true)
@@ -119,8 +112,17 @@ fun BrowserScreen(
                             loadWithOverviewMode = true
                             cacheMode = WebSettings.LOAD_DEFAULT
                             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            // Remove '; wv' so search engines and web apps don't reject WebView
                             userAgentString = userAgentString.replace("; wv", "")
+                        }
+
+                        // Safari scroll-to-minimize toolbar behavior
+                        setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                            val dy = scrollY - oldScrollY
+                            if (dy > 16 && scrollY > 120) {
+                                viewModel.setBarMinimized(true)
+                            } else if (dy < -16 || scrollY < 40) {
+                                viewModel.setBarMinimized(false)
+                            }
                         }
 
                         webViewClient = object : WebViewClient() {
@@ -153,8 +155,7 @@ fun BrowserScreen(
                                     false
                                 } else {
                                     try {
-                                        val intent = Intent(Intent.ACTION_VIEW, request.url)
-                                        view?.context?.startActivity(intent)
+                                        view?.context?.startActivity(Intent(Intent.ACTION_VIEW, request.url))
                                         true
                                     } catch (_: Exception) {
                                         true
@@ -173,45 +174,35 @@ fun BrowserScreen(
                             }
                         }
 
-                        if (state.currentUrl.isNotBlank()) {
-                            loadUrl(state.currentUrl)
-                        }
-
                         webViewInstance = this
                     }
                 },
                 update = { view ->
                     webViewInstance = view
-                    if (!state.isStartPage && state.currentUrl.isNotBlank() && view.url != state.currentUrl) {
-                        view.loadUrl(state.currentUrl)
-                    }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
             )
+
+            // Safari Start Page Overlay
+            AnimatedVisibility(
+                visible = state.isStartPage,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(180)),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                AppleStartPage(
+                    bookmarks = state.bookmarks,
+                    onSelectBookmark = { url ->
+                        viewModel.loadUrl(url)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
-        // Safari Start Page (Favorites, Quick Links) captured by hazeSource when visible
-        AnimatedVisibility(
-            visible = state.isStartPage,
-            enter = fadeIn(animationSpec = tween(250)),
-            exit = fadeOut(animationSpec = tween(200)),
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState)
-        ) {
-            AppleStartPage(
-                bookmarks = state.bookmarks,
-                onSelectBookmark = { url ->
-                    viewModel.loadUrl(url)
-                },
-                onSearchClick = {
-                    viewModel.setEditingUrl(true)
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Apple Safari Floating Liquid Glass Bottom Bar
+        // Apple Safari Floating Liquid Glass Dock
         AppleBottomBar(
             state = state,
             hazeState = hazeState,
@@ -231,16 +222,25 @@ fun BrowserScreen(
             onSubmitUrl = { input ->
                 viewModel.loadUrl(input)
             },
+            onToggleBookmark = {
+                viewModel.toggleBookmark()
+            },
             onOpenBookmarks = {
                 viewModel.setShowBookmarksSheet(true)
+            },
+            onOpenStartPage = {
+                viewModel.openStartPage()
             },
             onEditUrl = { editing ->
                 viewModel.setEditingUrl(editing)
             },
+            onRestoreBar = {
+                viewModel.setBarMinimized(false)
+            },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // Apple Modal Bookmarks Sheet
+        // Apple Safari Bookmarks Modal Sheet
         if (state.showBookmarksSheet) {
             BookmarksSheet(
                 bookmarks = state.bookmarks,

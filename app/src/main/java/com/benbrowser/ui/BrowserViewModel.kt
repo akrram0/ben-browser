@@ -22,45 +22,68 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val state: StateFlow<BrowserState> = _state.asStateFlow()
 
     fun loadUrl(input: String) {
-        val resolved = resolveUrl(input)
+        val trimmed = input.trim()
+        if (trimmed.isBlank()) return
+        val resolved = resolveUrl(trimmed)
         _state.update {
             it.copy(
                 currentUrl = resolved,
+                pendingUrl = resolved,
                 displayUrl = extractDomain(resolved),
                 isStartPage = false,
                 isEditingUrl = false,
+                isBarMinimized = false,
                 isCurrentBookmarked = repository.isBookmarked(resolved)
             )
         }
+    }
+
+    fun onUrlLoadConsumed() {
+        _state.update { it.copy(pendingUrl = null) }
     }
 
     fun openStartPage() {
         _state.update {
             it.copy(
                 isStartPage = true,
-                currentUrl = "",
+                pendingUrl = null,
                 displayUrl = "",
                 pageTitle = "Favorites",
                 isEditingUrl = false,
+                isBarMinimized = false,
+                isLoading = false,
                 bookmarks = repository.getBookmarks()
             )
         }
     }
 
     fun setEditingUrl(editing: Boolean) {
-        _state.update { it.copy(isEditingUrl = editing) }
+        _state.update {
+            it.copy(
+                isEditingUrl = editing,
+                isBarMinimized = if (editing) false else it.isBarMinimized
+            )
+        }
+    }
+
+    fun setBarMinimized(minimized: Boolean) {
+        _state.update {
+            if (it.isStartPage || it.isEditingUrl) it.copy(isBarMinimized = false)
+            else it.copy(isBarMinimized = minimized)
+        }
     }
 
     fun toggleBookmark() {
         val current = _state.value
         val url = current.currentUrl
-        if (url.isBlank()) return
+        if (url.isBlank() || current.isStartPage) return
 
-        if (repository.isBookmarked(url)) {
-            val bookmark = repository.getBookmarks().find { it.url.equals(url, ignoreCase = true) }
-            if (bookmark != null) {
-                repository.removeBookmark(bookmark.id)
-            }
+        val clean = url.trimEnd('/')
+        val existing = repository.getBookmarks().find {
+            it.url.trimEnd('/').equals(clean, ignoreCase = true)
+        }
+        if (existing != null) {
+            repository.removeBookmark(existing.id)
         } else {
             repository.addBookmark(current.pageTitle.ifBlank { extractDomain(url) }, url)
         }
@@ -85,15 +108,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setShowBookmarksSheet(show: Boolean) {
-        if (show) {
-            _state.update { it.copy(showBookmarksSheet = true, bookmarks = repository.getBookmarks()) }
-        } else {
-            _state.update { it.copy(showBookmarksSheet = false) }
+        _state.update {
+            it.copy(
+                showBookmarksSheet = show,
+                bookmarks = if (show) repository.getBookmarks() else it.bookmarks
+            )
         }
     }
 
     fun onPageStarted(url: String?) {
         val validUrl = url.orEmpty()
+        if (validUrl.isBlank() || validUrl == "about:blank") return
         _state.update {
             it.copy(
                 currentUrl = validUrl,
@@ -106,6 +131,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun onPageFinished(url: String?) {
         val validUrl = url.orEmpty()
+        if (validUrl.isBlank() || validUrl == "about:blank") return
         _state.update {
             it.copy(
                 currentUrl = validUrl,
@@ -138,22 +164,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun resolveUrl(input: String): String {
-        val trimmed = input.trim()
-        return when {
-            trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> trimmed
-            trimmed.contains(".") && !trimmed.contains(" ") -> "https://$trimmed"
-            else -> "https://duckduckgo.com/?q=${URLEncoder.encode(trimmed, "UTF-8")}"
-        }
+    private fun resolveUrl(input: String): String = when {
+        input.startsWith("http://", ignoreCase = true) ||
+            input.startsWith("https://", ignoreCase = true) -> input
+        input.contains(".") && !input.contains(" ") -> "https://$input"
+        else -> "https://www.google.com/search?q=${URLEncoder.encode(input, "UTF-8")}"
     }
 
-    private fun extractDomain(url: String): String {
-        return try {
-            val uri = URI(url)
-            val host = uri.host
-            if (!host.isNullOrBlank()) host.removePrefix("www.") else url
-        } catch (_: Exception) {
-            url
-        }
+    private fun extractDomain(url: String): String = try {
+        URI(url).host?.removePrefix("www.")?.removePrefix("m.") ?: url
+    } catch (_: Exception) {
+        url
     }
 }
