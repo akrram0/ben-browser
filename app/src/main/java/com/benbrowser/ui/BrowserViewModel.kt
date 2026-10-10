@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.net.URI
 import java.net.URLEncoder
+import kotlin.math.abs
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BookmarkRepository(application)
@@ -33,6 +34,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 isStartPage = false,
                 isEditingUrl = false,
                 isBarMinimized = false,
+                isLoading = true,
+                progress = 0.1f,
                 isCurrentBookmarked = repository.isBookmarked(resolved)
             )
         }
@@ -46,18 +49,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _state.update {
             it.copy(
                 isStartPage = true,
+                currentUrl = "",
                 pendingUrl = null,
                 displayUrl = "",
                 pageTitle = "Favorites",
                 isEditingUrl = false,
                 isBarMinimized = false,
                 isLoading = false,
+                progress = 0f,
                 bookmarks = repository.getBookmarks()
             )
         }
     }
 
     fun setEditingUrl(editing: Boolean) {
+        if (_state.value.isEditingUrl == editing) return
         _state.update {
             it.copy(
                 isEditingUrl = editing,
@@ -67,10 +73,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setBarMinimized(minimized: Boolean) {
-        _state.update {
-            if (it.isStartPage || it.isEditingUrl) it.copy(isBarMinimized = false)
-            else it.copy(isBarMinimized = minimized)
-        }
+        val cur = _state.value
+        val target = if (cur.isStartPage || cur.isEditingUrl) false else minimized
+        if (cur.isBarMinimized == target) return
+        _state.update { it.copy(isBarMinimized = target) }
     }
 
     fun toggleBookmark() {
@@ -108,6 +114,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setShowBookmarksSheet(show: Boolean) {
+        if (_state.value.showBookmarksSheet == show) return
         _state.update {
             it.copy(
                 showBookmarksSheet = show,
@@ -120,7 +127,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val validUrl = url.orEmpty()
         if (validUrl.isBlank() || validUrl == "about:blank") return
         _state.update {
-            it.copy(
+            if (it.isStartPage) it
+            else it.copy(
                 currentUrl = validUrl,
                 displayUrl = extractDomain(validUrl),
                 isLoading = true,
@@ -133,29 +141,40 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val validUrl = url.orEmpty()
         if (validUrl.isBlank() || validUrl == "about:blank") return
         _state.update {
-            it.copy(
+            if (it.isStartPage) it
+            else it.copy(
                 currentUrl = validUrl,
                 displayUrl = extractDomain(validUrl),
                 isLoading = false,
+                progress = 1f,
                 isCurrentBookmarked = repository.isBookmarked(validUrl)
             )
         }
     }
 
-    fun onProgressChanged(progress: Int) {
+    fun onProgressChanged(newProgress: Int) {
+        val next = newProgress / 100f
+        val cur = _state.value
+        if (cur.isStartPage) return
+        // Throttle progress updates to >= 5% steps to prevent recomposition lag
+        if (newProgress < 100 && abs(next - cur.progress) < 0.05f) return
         _state.update {
             it.copy(
-                progress = progress / 100f,
-                isLoading = progress < 100
+                progress = next,
+                isLoading = newProgress < 100
             )
         }
     }
 
     fun onReceivedTitle(title: String?) {
-        _state.update { it.copy(pageTitle = title.orEmpty()) }
+        val clean = title.orEmpty()
+        if (clean == "about:blank" || _state.value.pageTitle == clean) return
+        _state.update { it.copy(pageTitle = clean) }
     }
 
     fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
+        val cur = _state.value
+        if (cur.canGoBack == canGoBack && cur.canGoForward == canGoForward) return
         _state.update {
             it.copy(
                 canGoBack = canGoBack,

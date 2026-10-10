@@ -3,6 +3,7 @@ package com.benbrowser
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -17,7 +18,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -27,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,8 +40,6 @@ import com.benbrowser.ui.BrowserViewModel
 import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -48,7 +48,6 @@ fun BrowserScreen(
     viewModel: BrowserViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val hazeState = rememberHazeState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
     // Dispatch user-initiated URL loads once without interrupting in-page redirects
@@ -61,6 +60,14 @@ fun BrowserScreen(
         }
     }
 
+    // Clear old webpage when returning to Start Page so next navigation never flashes stale content
+    LaunchedEffect(state.isStartPage) {
+        if (state.isStartPage) {
+            webViewInstance?.stopLoading()
+            webViewInstance?.loadUrl("about:blank")
+        }
+    }
+
     // System Back Handler: edit mode -> webView history -> start page -> exit
     BackHandler(enabled = !state.isStartPage || state.canGoBack || state.isEditingUrl) {
         when {
@@ -70,16 +77,17 @@ fun BrowserScreen(
         }
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Content Layer (Full-bleed under floating glass bar)
+        // Main Viewport (WebView + Start Page Overlay)
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState)
+                .weight(1f)
+                .fillMaxWidth()
+                .statusBarsPadding()
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -88,8 +96,9 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+
                         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                             WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
                         } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
@@ -115,12 +124,12 @@ fun BrowserScreen(
                             userAgentString = userAgentString.replace("; wv", "")
                         }
 
-                        // Safari scroll-to-minimize toolbar behavior
+                        // Safari scroll-to-minimize toolbar behavior (deduplicated)
                         setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                             val dy = scrollY - oldScrollY
-                            if (dy > 16 && scrollY > 120) {
+                            if (dy > 20 && scrollY > 140) {
                                 viewModel.setBarMinimized(true)
-                            } else if (dy < -16 || scrollY < 40) {
+                            } else if (dy < -20 || scrollY < 40) {
                                 viewModel.setBarMinimized(false)
                             }
                         }
@@ -135,6 +144,11 @@ fun BrowserScreen(
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
+                                if (url == "about:blank") {
+                                    view?.clearHistory()
+                                    viewModel.updateNavigationState(canGoBack = false, canGoForward = false)
+                                    return
+                                }
                                 viewModel.onPageFinished(url)
                                 viewModel.updateNavigationState(
                                     canGoBack = view?.canGoBack() ?: false,
@@ -143,6 +157,7 @@ fun BrowserScreen(
                             }
 
                             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                                if (url == "about:blank") return
                                 viewModel.updateNavigationState(
                                     canGoBack = view?.canGoBack() ?: false,
                                     canGoForward = view?.canGoForward() ?: false
@@ -180,16 +195,14 @@ fun BrowserScreen(
                 update = { view ->
                     webViewInstance = view
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
+                modifier = Modifier.fillMaxSize()
             )
 
-            // Safari Start Page Overlay
+            // Safari Start Page Overlay (fast 120ms fade, no flash)
             AnimatedVisibility(
                 visible = state.isStartPage,
-                enter = fadeIn(animationSpec = tween(220)),
-                exit = fadeOut(animationSpec = tween(180)),
+                enter = fadeIn(animationSpec = tween(120)),
+                exit = fadeOut(animationSpec = tween(120)),
                 modifier = Modifier.fillMaxSize()
             ) {
                 AppleStartPage(
@@ -202,10 +215,9 @@ fun BrowserScreen(
             }
         }
 
-        // Apple Safari Floating Liquid Glass Dock
+        // Docked iOS Safari Bottom Bar
         AppleBottomBar(
             state = state,
-            hazeState = hazeState,
             onBack = {
                 if (webViewInstance?.canGoBack() == true) {
                     webViewInstance?.goBack()
@@ -236,32 +248,31 @@ fun BrowserScreen(
             },
             onRestoreBar = {
                 viewModel.setBarMinimized(false)
-            },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            }
         )
+    }
 
-        // Apple Safari Bookmarks Modal Sheet
-        if (state.showBookmarksSheet) {
-            BookmarksSheet(
-                bookmarks = state.bookmarks,
-                isCurrentBookmarked = state.isCurrentBookmarked,
-                currentUrl = state.currentUrl,
-                onToggleBookmark = {
-                    viewModel.toggleBookmark()
-                },
-                onOpenStartPage = {
-                    viewModel.openStartPage()
-                },
-                onSelectBookmark = { url ->
-                    viewModel.loadUrl(url)
-                },
-                onDeleteBookmark = { id ->
-                    viewModel.removeBookmark(id)
-                },
-                onDismiss = {
-                    viewModel.setShowBookmarksSheet(false)
-                }
-            )
-        }
+    // Apple Safari Bookmarks Modal Sheet
+    if (state.showBookmarksSheet) {
+        BookmarksSheet(
+            bookmarks = state.bookmarks,
+            isCurrentBookmarked = state.isCurrentBookmarked,
+            currentUrl = state.currentUrl,
+            onToggleBookmark = {
+                viewModel.toggleBookmark()
+            },
+            onOpenStartPage = {
+                viewModel.openStartPage()
+            },
+            onSelectBookmark = { url ->
+                viewModel.loadUrl(url)
+            },
+            onDeleteBookmark = { id ->
+                viewModel.removeBookmark(id)
+            },
+            onDismiss = {
+                viewModel.setShowBookmarksSheet(false)
+            }
+        )
     }
 }
