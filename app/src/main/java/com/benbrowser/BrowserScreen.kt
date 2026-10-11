@@ -52,6 +52,8 @@ private object GeckoEngine {
     @Volatile
     private var runtime: GeckoRuntime? = null
 
+    fun isInitialized(): Boolean = runtime != null
+
     fun getRuntime(context: Context): GeckoRuntime {
         return runtime ?: synchronized(this) {
             runtime ?: GeckoRuntime.create(
@@ -79,10 +81,22 @@ fun BrowserScreen(
     val state by viewModel.state.collectAsState()
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
+    var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
     val geckoDrawTick = remember { mutableIntStateOf(0) }
 
-    // Lightweight session creation (0ms); actual native GeckoRuntime opens lazily on first navigation
     val geckoSession = remember { GeckoSession() }
+
+    // Pre-warm GeckoRuntime 180ms after first frame so cold start opens instantly and never attaches GeckoView before MozGlue loads
+    LaunchedEffect(Unit) {
+        if (!isEngineReady) {
+            kotlinx.coroutines.delay(180)
+        }
+        val runtime = GeckoEngine.getRuntime(context)
+        if (!geckoSession.isOpen) {
+            geckoSession.open(runtime)
+        }
+        isEngineReady = true
+    }
 
     DisposableEffect(geckoSession) {
         var lastScrollY = 0
@@ -207,20 +221,24 @@ fun BrowserScreen(
     // Dispatch user-initiated URL loads once without interrupting in-page redirects
     LaunchedEffect(state.pendingUrl, geckoViewInstance) {
         val targetUrl = state.pendingUrl
-        val view = geckoViewInstance
-        if (!targetUrl.isNullOrBlank() && view != null) {
-            view.visibility = View.VISIBLE
-            view.alpha = 1f
+        if (!targetUrl.isNullOrBlank()) {
+            val runtime = GeckoEngine.getRuntime(context)
             if (!geckoSession.isOpen) {
-                geckoSession.open(GeckoEngine.getRuntime(context))
+                geckoSession.open(runtime)
             }
-            geckoSession.loadUri(targetUrl)
-            viewModel.onUrlLoadConsumed()
+            isEngineReady = true
+            val view = geckoViewInstance
+            if (view != null) {
+                view.visibility = View.VISIBLE
+                view.alpha = 1f
+                geckoSession.loadUri(targetUrl)
+                viewModel.onUrlLoadConsumed()
+            }
         }
     }
 
     // Isolate GeckoView when on Start Page so Start Page animations run at locked 120fps
-    LaunchedEffect(state.isStartPage) {
+    LaunchedEffect(state.isStartPage, geckoViewInstance) {
         val view = geckoViewInstance ?: return@LaunchedEffect
         if (state.isStartPage) {
             if (geckoSession.isOpen) {
@@ -263,38 +281,44 @@ fun BrowserScreen(
                     drawContent()
                 }
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    GeckoView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
-                        coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
-                        setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                        visibility = View.GONE
-                        alpha = 0f
-
-                        ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
-                            if (v.hasFocus()) {
-                                ViewCompat.onApplyWindowInsets(v, insets)
-                            } else {
-                                WindowInsetsCompat.CONSUMED
-                            }
+            if (isEngineReady) {
+                AndroidView(
+                    factory = { ctx ->
+                        val runtime = GeckoEngine.getRuntime(ctx)
+                        if (!geckoSession.isOpen) {
+                            geckoSession.open(runtime)
                         }
+                        GeckoView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                            coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
+                            setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                            visibility = if (state.isStartPage) View.GONE else View.VISIBLE
+                            alpha = if (state.isStartPage) 0f else 1f
 
-                        setSession(geckoSession)
-                        geckoViewInstance = this
-                    }
-                },
-                update = { view ->
-                    geckoViewInstance = view
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-            )
+                            ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                                if (v.hasFocus()) {
+                                    ViewCompat.onApplyWindowInsets(v, insets)
+                                } else {
+                                    WindowInsetsCompat.CONSUMED
+                                }
+                            }
+
+                            setSession(geckoSession)
+                            geckoViewInstance = this
+                        }
+                    },
+                    update = { view ->
+                        geckoViewInstance = view
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                )
+            }
 
             // Safari Start Page Overlay (Fast 150ms RenderThread Scale + Fade Transition)
             AnimatedVisibility(
