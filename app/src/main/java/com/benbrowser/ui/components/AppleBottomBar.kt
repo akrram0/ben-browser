@@ -1,22 +1,14 @@
 package com.benbrowser.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -34,7 +26,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -49,8 +40,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -76,6 +69,45 @@ import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.benbrowser.ui.BrowserState
 
+private val GlassFillBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xE625272F),
+        GlassSurfaceFallback
+    )
+)
+
+private val GlassSpecularBorderBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0x38FFFFFF),
+        GlassBorder
+    )
+)
+
+private val BottomScrimBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color.Transparent,
+        Color(0xB3050608)
+    )
+)
+
+private fun Modifier.liquidGlassIsland(isFocused: Boolean = false): Modifier = this
+    .shadow(
+        elevation = 12.dp,
+        shape = CircleShape,
+        ambientColor = Color.Black,
+        spotColor = Color.Black
+    )
+    .clip(CircleShape)
+    .background(GlassFillBrush, CircleShape)
+    .border(
+        border = if (isFocused) {
+            BorderStroke(1.dp, AccentBlue.copy(alpha = 0.6f))
+        } else {
+            BorderStroke(1.dp, GlassSpecularBorderBrush)
+        },
+        shape = CircleShape
+    )
+
 @Composable
 fun AppleBottomBar(
     state: BrowserState,
@@ -83,7 +115,6 @@ fun AppleBottomBar(
     onForward: () -> Unit,
     onReload: () -> Unit,
     onSubmitUrl: (String) -> Unit,
-    onToggleBookmark: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
@@ -118,90 +149,39 @@ fun AppleBottomBar(
 
     val animatedProgress by animateFloatAsState(
         targetValue = if (state.isLoading) state.progress.coerceIn(0.08f, 1f) else 0f,
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
         label = "safari_progress"
     )
 
     val isMinimized = state.isBarMinimized && !state.isStartPage && !state.isEditingUrl
-    val capsuleHeight by animateDpAsState(
-        targetValue = if (isMinimized) 32.dp else 44.dp,
-        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
-        label = "capsule_height"
-    )
 
-    // Docked Safari Bottom Surface — prevents webpage text bleeding under or behind controls
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(GlassSurfaceFallback)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                if (isMinimized) onRestoreBar()
-            }
+            .background(BottomScrimBrush)
             .imePadding()
             .navigationBarsPadding()
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 12.dp,
+                bottom = if (isMinimized) 8.dp else 10.dp
+            ),
+        contentAlignment = Alignment.BottomCenter
     ) {
-        // Top Specular Hairline + Page Load Progress Bar
-        Box(modifier = Modifier.fillMaxWidth()) {
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = GlassBorder
-            )
-            if (state.isLoading && state.progress < 1f && !state.isStartPage) {
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp),
-                    color = AccentBlue,
-                    trackColor = Color.Transparent
-                )
-            }
-        }
-
-        // Row 1: Safari Address Capsule
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = if (isMinimized) 6.dp else 10.dp,
-                    bottom = if (isMinimized) 6.dp else 4.dp
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val capsuleShape = RoundedCornerShape(12.dp)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(capsuleHeight)
-                    .clip(capsuleShape)
-                    .background(
-                        if (isMinimized) Color.Transparent else Color(0xFF23252E),
-                        capsuleShape
-                    )
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            when {
-                                isMinimized -> Color.Transparent
-                                state.isEditingUrl -> AccentBlue.copy(alpha = 0.45f)
-                                else -> GlassBorder
-                            }
-                        ),
-                        capsuleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (state.isEditingUrl) {
-                    // Instant URL Input Mode (0ms transition delay)
+        when {
+            // STATE 1: Instant URL Editing Pill (0ms mount)
+            state.isEditingUrl -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
+                            .weight(1f)
+                            .height(48.dp)
+                            .liquidGlassIsland(isFocused = true)
+                            .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -254,11 +234,104 @@ fun AppleBottomBar(
                             }
                         }
                     }
-                } else {
-                    // Safari Browsing / Minimized / Start Page Capsule
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = "Cancel",
+                        color = AccentBlue,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                onEditUrl(false)
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                            .padding(horizontal = 4.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
+            // STATE 2: Scrolled-Down Micro-Pill (iOS 26 Compact Collapsed State)
+            isMinimized -> {
+                Box(
+                    modifier = Modifier
+                        .height(30.dp)
+                        .liquidGlassIsland()
+                        .clickable(onClick = onRestoreBar)
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = state.displayUrl.ifBlank { state.currentUrl },
+                        fontSize = 12.sp,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // STATE 3: Expanded iOS 26 3-Pill Liquid Glass Layout
+            else -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Island 1: Left Back / Forward Pill (<  >)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .height(48.dp)
+                            .width(88.dp)
+                            .liquidGlassIsland(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            enabled = state.canGoBack || !state.isStartPage,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = TextPrimary,
+                                disabledContentColor = DisabledTint
+                            ),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_apple_back),
+                                contentDescription = "Back",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onForward,
+                            enabled = state.canGoForward,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = TextPrimary,
+                                disabledContentColor = DisabledTint
+                            ),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_apple_forward),
+                                contentDescription = "Forward",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Island 2: Center Address Capsule ([Menu]  github.com  [↻])
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .liquidGlassIsland(),
+                        contentAlignment = Alignment.Center
                     ) {
                         if (state.isStartPage) {
                             Row(
@@ -266,7 +339,8 @@ fun AppleBottomBar(
                                     .fillMaxWidth()
                                     .fillMaxHeight()
                                     .clickable { onEditUrl(true) }
-                                    .padding(horizontal = 12.dp),
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -277,7 +351,7 @@ fun AppleBottomBar(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Search or enter website name",
+                                    text = "Search or enter website",
                                     fontSize = 15.sp,
                                     color = TextSecondary,
                                     fontWeight = FontWeight.Normal,
@@ -286,41 +360,52 @@ fun AppleBottomBar(
                                 )
                             }
                         } else {
-                            // Left balancer so domain stays dead-center when Reload icon is visible
-                            if (!isMinimized) {
-                                Spacer(modifier = Modifier.width(36.dp))
-                            }
                             Row(
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth()
                                     .fillMaxHeight()
-                                    .clickable {
-                                        if (isMinimized) onRestoreBar() else onEditUrl(true)
-                                    },
-                                horizontalArrangement = Arrangement.Center,
+                                    .padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_apple_lock),
-                                    contentDescription = "Secure",
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(if (isMinimized) 11.dp else 13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = state.displayUrl.ifBlank { state.currentUrl },
-                                    fontSize = if (isMinimized) 12.sp else 15.sp,
-                                    color = if (isMinimized) TextSecondary else TextPrimary,
-                                    fontWeight = FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            if (!isMinimized) {
+                                // Left Page Menu / Bookmarks Trigger
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .clickable(onClick = onOpenBookmarks),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_apple_page_menu),
+                                        contentDescription = "Page Menu & Bookmarks",
+                                        tint = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                // Center Domain Label
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable { onEditUrl(true) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = state.displayUrl.ifBlank { state.currentUrl },
+                                        fontSize = 15.sp,
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                // Right Reload Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
                                         .clip(CircleShape)
                                         .clickable(onClick = onReload),
                                     contentAlignment = Alignment.Center
@@ -328,124 +413,42 @@ fun AppleBottomBar(
                                     Icon(
                                         painter = painterResource(R.drawable.ic_apple_reload),
                                         contentDescription = "Reload",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(15.dp)
+                                        tint = TextPrimary,
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
                         }
-                    }
-                }
-            }
 
-            if (state.isEditingUrl) {
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Cancel",
-                    color = AccentBlue,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Normal,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            onEditUrl(false)
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
+                        // Subtle Page Load Progress Line along bottom rim of Center Pill
+                        if (state.isLoading && state.progress < 1f && !state.isStartPage) {
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .align(Alignment.BottomCenter),
+                                color = AccentBlue,
+                                trackColor = Color.Transparent
+                            )
                         }
-                        .padding(horizontal = 4.dp, vertical = 8.dp)
-                )
-            }
-        }
+                    }
 
-        // Row 2: Safari 5-Icon Control Strip (collapses smoothly on scroll down or URL edit)
-        AnimatedVisibility(
-            visible = !state.isEditingUrl && !isMinimized,
-            enter = expandVertically(tween(150, easing = FastOutSlowInEasing)) + fadeIn(tween(120)),
-            exit = shrinkVertically(tween(150, easing = FastOutSlowInEasing)) + fadeOut(tween(100))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    enabled = state.canGoBack || !state.isStartPage,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = TextPrimary,
-                        disabledContentColor = DisabledTint
-                    ),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_apple_back),
-                        contentDescription = "Back",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onForward,
-                    enabled = state.canGoForward,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = TextPrimary,
-                        disabledContentColor = DisabledTint
-                    ),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_apple_forward),
-                        contentDescription = "Forward",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onToggleBookmark,
-                    enabled = !state.isStartPage && state.currentUrl.isNotBlank(),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
-                        disabledContentColor = DisabledTint
-                    ),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(
-                            if (state.isCurrentBookmarked) R.drawable.ic_apple_star_filled
-                            else R.drawable.ic_apple_star
-                        ),
-                        contentDescription = "Bookmark",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onOpenBookmarks,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = TextPrimary),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_apple_book),
-                        contentDescription = "Bookmarks",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onOpenStartPage,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = if (state.isStartPage) AccentBlue else TextPrimary
-                    ),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_apple_tabs),
-                        contentDescription = "Start Page",
-                        modifier = Modifier.size(19.dp)
-                    )
+                    // Island 3: Right Tabs / Start Page Circle (⧉)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .liquidGlassIsland()
+                            .clickable(onClick = onOpenStartPage),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_apple_tabs),
+                            contentDescription = "Tabs / Start Page",
+                            tint = if (state.isStartPage) AccentBlue else TextPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
                 }
             }
         }
