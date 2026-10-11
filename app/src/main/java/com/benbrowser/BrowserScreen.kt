@@ -13,9 +13,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +43,8 @@ import com.benbrowser.ui.BrowserViewModel
 import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -47,6 +53,7 @@ fun BrowserScreen(
     viewModel: BrowserViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val hazeState = rememberHazeState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
     // Dispatch user-initiated URL loads once without interrupting in-page redirects
@@ -59,7 +66,7 @@ fun BrowserScreen(
         }
     }
 
-    // Hide WebView hardware layer on Start Page so stale frames never flash before onPageCommitVisible
+    // Hide WebView layer on Start Page so stale frames never flash before onPageCommitVisible
     LaunchedEffect(state.isStartPage) {
         if (state.isStartPage) {
             webViewInstance?.stopLoading()
@@ -76,172 +83,191 @@ fun BrowserScreen(
         }
     }
 
-    // Full-screen Box so WebView never resizes or reflows DOM when bottom pills collapse/expand
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        AndroidView(
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                    setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                    isVerticalScrollBarEnabled = false
-                    overScrollMode = View.OVER_SCROLL_NEVER
+        // Haze Source Layer (WebView + Start Page) for Liquid Glass Refraction & Blur
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState)
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                        isVerticalScrollBarEnabled = false
+                        overScrollMode = View.OVER_SCROLL_NEVER
 
-                    if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                        WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
-                    } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                        @Suppress("DEPRECATION")
-                        WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
-                    }
-
-                    val cookieManager = CookieManager.getInstance()
-                    cookieManager.setAcceptCookie(true)
-                    cookieManager.setAcceptThirdPartyCookies(this, true)
-
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        setSupportZoom(true)
-                        builtInZoomControls = true
-                        displayZoomControls = false
-                        useWideViewPort = true
-                        loadWithOverviewMode = true
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = userAgentString.replace("; wv", "")
-                    }
-
-                    // Zero-allocation hysteresis scroll listener for 120fps scrolling
-                    var scrollAccum = 0
-                    var latchedMinimized = false
-                    setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
-                        val dy = scrollY - oldScrollY
-                        if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
-                            scrollAccum = 0
+                        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
+                        } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                            @Suppress("DEPRECATION")
+                            WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_ON)
                         }
-                        scrollAccum += dy
-                        if (scrollY < 48) {
-                            scrollAccum = 0
-                            if (latchedMinimized) {
+
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.setAcceptCookie(true)
+                        cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            userAgentString = userAgentString.replace("; wv", "")
+                        }
+
+                        // Zero-allocation hysteresis scroll listener
+                        var scrollAccum = 0
+                        var latchedMinimized = false
+                        setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                            val dy = scrollY - oldScrollY
+                            if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
+                                scrollAccum = 0
+                            }
+                            scrollAccum += dy
+                            if (scrollY < 48) {
+                                scrollAccum = 0
+                                if (latchedMinimized) {
+                                    latchedMinimized = false
+                                    viewModel.setBarMinimized(false)
+                                }
+                            } else if (scrollAccum > 56 && scrollY > 120 && !latchedMinimized) {
+                                latchedMinimized = true
+                                scrollAccum = 0
+                                viewModel.setBarMinimized(true)
+                            } else if (scrollAccum < -40 && latchedMinimized) {
                                 latchedMinimized = false
+                                scrollAccum = 0
                                 viewModel.setBarMinimized(false)
                             }
-                        } else if (scrollAccum > 56 && scrollY > 120 && !latchedMinimized) {
-                            latchedMinimized = true
-                            scrollAccum = 0
-                            viewModel.setBarMinimized(true)
-                        } else if (scrollAccum < -40 && latchedMinimized) {
-                            latchedMinimized = false
-                            scrollAccum = 0
-                            viewModel.setBarMinimized(false)
-                        }
-                    }
-
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            if (url == "about:blank") return
-                            latchedMinimized = false
-                            scrollAccum = 0
-                            viewModel.onPageStarted(url)
-                            viewModel.updateNavigationState(
-                                canGoBack = view?.canGoBack() ?: false,
-                                canGoForward = view?.canGoForward() ?: false
-                            )
                         }
 
-                        override fun onPageCommitVisible(view: WebView?, url: String?) {
-                            view?.alpha = 1f
-                        }
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                if (url == "about:blank") return
+                                latchedMinimized = false
+                                scrollAccum = 0
+                                viewModel.onPageStarted(url)
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
 
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            if (url == "about:blank") return
-                            view?.alpha = 1f
-                            viewModel.onPageFinished(url)
-                            viewModel.updateNavigationState(
-                                canGoBack = view?.canGoBack() ?: false,
-                                canGoForward = view?.canGoForward() ?: false
-                            )
-                        }
+                            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                                view?.alpha = 1f
+                            }
 
-                        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
-                            if (url == "about:blank") return
-                            viewModel.updateNavigationState(
-                                canGoBack = view?.canGoBack() ?: false,
-                                canGoForward = view?.canGoForward() ?: false
-                            )
-                        }
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                if (url == "about:blank") return
+                                view?.alpha = 1f
+                                viewModel.onPageFinished(url)
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
 
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val url = request?.url?.toString() ?: return false
-                            return if (url.startsWith("http://") || url.startsWith("https://")) {
-                                false
-                            } else {
-                                try {
-                                    view?.context?.startActivity(Intent(Intent.ACTION_VIEW, request.url))
-                                    true
-                                } catch (_: Exception) {
-                                    true
+                            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                                if (url == "about:blank") return
+                                viewModel.updateNavigationState(
+                                    canGoBack = view?.canGoBack() ?: false,
+                                    canGoForward = view?.canGoForward() ?: false
+                                )
+                            }
+
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                val url = request?.url?.toString() ?: return false
+                                return if (url.startsWith("http://") || url.startsWith("https://")) {
+                                    false
+                                } else {
+                                    try {
+                                        view?.context?.startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                                        true
+                                    } catch (_: Exception) {
+                                        true
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                            viewModel.onProgressChanged(newProgress)
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                viewModel.onProgressChanged(newProgress)
+                            }
+
+                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                viewModel.onReceivedTitle(title)
+                            }
                         }
 
-                        override fun onReceivedTitle(view: WebView?, title: String?) {
-                            viewModel.onReceivedTitle(title)
-                        }
+                        webViewInstance = this
                     }
-
-                    webViewInstance = this
-                }
-            },
-            update = { view ->
-                webViewInstance = view
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-        )
-
-        // Safari Start Page Overlay (100ms crisp fade)
-        AnimatedVisibility(
-            visible = state.isStartPage,
-            enter = fadeIn(animationSpec = tween(100)),
-            exit = fadeOut(animationSpec = tween(100)),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            AppleStartPage(
-                bookmarks = state.bookmarks,
-                onSelectBookmark = { url ->
-                    viewModel.loadUrl(url)
                 },
-                modifier = Modifier.fillMaxSize()
+                update = { view ->
+                    webViewInstance = view
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
             )
+
+            // Safari Start Page Overlay (Spring Scale + Fade Transition)
+            AnimatedVisibility(
+                visible = state.isStartPage,
+                enter = fadeIn(animationSpec = tween(200)) +
+                    scaleIn(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        initialScale = 0.94f
+                    ),
+                exit = fadeOut(animationSpec = tween(160)) +
+                    scaleOut(
+                        animationSpec = tween(160),
+                        targetScale = 1.04f
+                    ),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                AppleStartPage(
+                    bookmarks = state.bookmarks,
+                    onSelectBookmark = { url ->
+                        viewModel.loadUrl(url)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         // Floating iOS 26 Safari 3-Pill Liquid Glass Bottom Bar
         AppleBottomBar(
             state = state,
+            hazeState = hazeState,
             onBack = {
                 if (webViewInstance?.canGoBack() == true) {
+                    webViewInstance?.alpha = 1f
                     webViewInstance?.goBack()
                 } else {
                     viewModel.openStartPage()
                 }
             },
             onForward = {
+                webViewInstance?.alpha = 1f
                 webViewInstance?.goForward()
             },
             onReload = {
