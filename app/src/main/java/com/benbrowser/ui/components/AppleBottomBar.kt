@@ -1,21 +1,12 @@
 package com.benbrowser.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,6 +49,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -70,6 +62,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.benbrowser.R
@@ -85,6 +78,13 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.GlassStyle
 import dev.chrisbanes.haze.glass.hazeGlass
 
+private enum class CenterPillMode {
+    StartPage,
+    Browsing,
+    Minimized,
+    Editing
+}
+
 private val GlassSpecularBorderBrush = Brush.verticalGradient(
     colors = listOf(
         Color(0x36FFFFFF),
@@ -95,24 +95,24 @@ private val GlassSpecularBorderBrush = Brush.verticalGradient(
 private val BottomScrimBrush = Brush.verticalGradient(
     colors = listOf(
         Color.Transparent,
-        Color(0x99050608)
+        Color(0x80050608)
     )
 )
 
 @OptIn(ExperimentalHazeApi::class)
 private fun Modifier.liquidGlassIsland(hazeState: HazeState): Modifier = this
-    .clip(CircleShape)
     .hazeGlass(
         input = HazeInput.Sources(hazeState),
         style = GlassStyle.regular.then {
             shape(CircleShape)
-            tint(Color(0x6616181D))
+            tint(Color(0x5916181D))
         }
     )
     .border(
         border = BorderStroke(1.dp, GlassSpecularBorderBrush),
         shape = CircleShape
     )
+    .clip(CircleShape)
 
 @OptIn(ExperimentalHazeApi::class)
 @Composable
@@ -137,18 +137,6 @@ fun AppleBottomBar(
         mutableStateOf(TextFieldValue(state.currentUrl))
     }
 
-    LaunchedEffect(state.isEditingUrl) {
-        if (state.isEditingUrl) {
-            val initialText = if (state.isStartPage) "" else state.currentUrl
-            textFieldValue = TextFieldValue(
-                text = initialText,
-                selection = TextRange(0, initialText.length)
-            )
-            focusRequester.requestFocus()
-            keyboardController?.show()
-        }
-    }
-
     LaunchedEffect(state.currentUrl) {
         if (!state.isEditingUrl) {
             textFieldValue = TextFieldValue(state.currentUrl)
@@ -164,22 +152,69 @@ fun AppleBottomBar(
     val isMinimized = state.isBarMinimized && !state.isStartPage && !state.isEditingUrl
     val showSideIslands = !state.isEditingUrl && !isMinimized
 
-    val pillHeight by animateDpAsState(
-        targetValue = if (isMinimized) 32.dp else 48.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "pill_height"
-    )
+    val pillMode = when {
+        state.isEditingUrl -> CenterPillMode.Editing
+        isMinimized -> CenterPillMode.Minimized
+        state.isStartPage -> CenterPillMode.StartPage
+        else -> CenterPillMode.Browsing
+    }
 
-    val islandSpring = spring<androidx.compose.ui.unit.IntSize>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMediumLow
+    val dpSpring = spring<Dp>(
+        dampingRatio = 0.8f,
+        stiffness = Spring.StiffnessLow
     )
     val floatSpring = spring<Float>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMediumLow
+        dampingRatio = 0.8f,
+        stiffness = Spring.StiffnessLow
+    )
+
+    // Continuous spring-driven dimensions so hazeGlass islands physically morph without clipping layers
+    val leftIslandWidth by animateDpAsState(
+        targetValue = if (showSideIslands) 88.dp else 0.dp,
+        animationSpec = dpSpring,
+        label = "left_island_width"
+    )
+    val leftGap by animateDpAsState(
+        targetValue = if (showSideIslands) 8.dp else 0.dp,
+        animationSpec = dpSpring,
+        label = "left_gap"
+    )
+    val rightIslandWidth by animateDpAsState(
+        targetValue = if (showSideIslands) 48.dp else 0.dp,
+        animationSpec = dpSpring,
+        label = "right_island_width"
+    )
+    val rightGap by animateDpAsState(
+        targetValue = if (showSideIslands) 8.dp else 0.dp,
+        animationSpec = dpSpring,
+        label = "right_gap"
+    )
+    val sideIslandAlpha by animateFloatAsState(
+        targetValue = if (showSideIslands) 1f else 0f,
+        animationSpec = floatSpring,
+        label = "side_island_alpha"
+    )
+
+    val cancelWidth by animateDpAsState(
+        targetValue = if (state.isEditingUrl) 64.dp else 0.dp,
+        animationSpec = dpSpring,
+        label = "cancel_width"
+    )
+    val cancelAlpha by animateFloatAsState(
+        targetValue = if (state.isEditingUrl) 1f else 0f,
+        animationSpec = floatSpring,
+        label = "cancel_alpha"
+    )
+
+    val pillHeight by animateDpAsState(
+        targetValue = if (isMinimized) 32.dp else 48.dp,
+        animationSpec = dpSpring,
+        label = "pill_height"
+    )
+    val barHorizontalPadding by animateDpAsState(
+        targetValue = if (isMinimized) 104.dp else 16.dp,
+        animationSpec = dpSpring,
+        label = "bar_horizontal_padding"
     )
 
     Box(
@@ -189,230 +224,163 @@ fun AppleBottomBar(
             .imePadding()
             .navigationBarsPadding()
             .padding(
-                start = 16.dp,
-                end = 16.dp,
+                start = barHorizontalPadding,
+                end = barHorizontalPadding,
                 top = 12.dp,
                 bottom = if (isMinimized) 8.dp else 10.dp
             ),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Unified Single-Row Morphing Layout (Left Island + Center Capsule + Right Island / Cancel)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Island 1: Left Back / Forward Liquid Glass Pill (<  >)
-            AnimatedVisibility(
-                visible = showSideIslands,
-                enter = fadeIn(floatSpring) +
-                    scaleIn(floatSpring, initialScale = 0.82f) +
-                    expandHorizontally(islandSpring, expandFrom = Alignment.Start),
-                exit = fadeOut(tween(140)) +
-                    scaleOut(tween(140), targetScale = 0.82f) +
-                    shrinkHorizontally(islandSpring, shrinkTowards = Alignment.Start)
-            ) {
+            if (leftIslandWidth > 1.dp) {
                 Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .width(leftIslandWidth)
+                        .graphicsLayer {
+                            alpha = sideIslandAlpha
+                            scaleX = 0.85f + (0.15f * sideIslandAlpha)
+                            scaleY = 0.85f + (0.15f * sideIslandAlpha)
+                        }
+                        .liquidGlassIsland(hazeState),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .height(48.dp)
-                            .width(88.dp)
-                            .liquidGlassIsland(hazeState),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                    IconButton(
+                        onClick = onBack,
+                        enabled = (state.canGoBack || !state.isStartPage) && showSideIslands,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = TextPrimary,
+                            disabledContentColor = DisabledTint
+                        ),
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        IconButton(
-                            onClick = onBack,
-                            enabled = state.canGoBack || !state.isStartPage,
-                            colors = IconButtonDefaults.iconButtonColors(
-                                contentColor = TextPrimary,
-                                disabledContentColor = DisabledTint
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_apple_back),
-                                contentDescription = "Back",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = onForward,
-                            enabled = state.canGoForward,
-                            colors = IconButtonDefaults.iconButtonColors(
-                                contentColor = TextPrimary,
-                                disabledContentColor = DisabledTint
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_apple_forward),
-                                contentDescription = "Forward",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        Icon(
+                            painter = painterResource(R.drawable.ic_apple_back),
+                            contentDescription = "Back",
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
+                        onClick = onForward,
+                        enabled = state.canGoForward && showSideIslands,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = TextPrimary,
+                            disabledContentColor = DisabledTint
+                        ),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_apple_forward),
+                            contentDescription = "Forward",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.width(leftGap))
             }
 
             // Island 2: Center Morphing Liquid Glass Capsule (Normal <-> Search Edit <-> Scrolled Micro-Pill)
             Box(
                 modifier = Modifier
-                    .then(
-                        if (isMinimized) Modifier.width(164.dp)
-                        else Modifier.weight(1f)
-                    )
+                    .weight(1f)
                     .height(pillHeight)
-                    .animateContentSize(animationSpec = islandSpring)
                     .liquidGlassIsland(hazeState),
                 contentAlignment = Alignment.Center
             ) {
-                when {
-                    state.isEditingUrl -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_apple_search),
-                                contentDescription = "Search",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            BasicTextField(
-                                value = textFieldValue,
-                                onValueChange = { textFieldValue = it },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontFamily = FontFamily.Default,
-                                    fontWeight = FontWeight.Normal
-                                ),
-                                cursorBrush = SolidColor(AccentBlue),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Uri,
-                                    imeAction = ImeAction.Go
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onGo = {
-                                        if (textFieldValue.text.isNotBlank()) {
-                                            onSubmitUrl(textFieldValue.text)
-                                        }
-                                        onEditUrl(false)
-                                        keyboardController?.hide()
-                                        focusManager.clearFocus()
-                                    }
-                                ),
+                Crossfade(
+                    targetState = pillMode,
+                    animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+                    label = "center_pill_crossfade"
+                ) { mode ->
+                    when (mode) {
+                        CenterPillMode.Editing -> {
+                            LaunchedEffect(Unit) {
+                                val initialText = if (state.isStartPage) "" else state.currentUrl
+                                textFieldValue = TextFieldValue(
+                                    text = initialText,
+                                    selection = TextRange(0, initialText.length)
+                                )
+                                focusRequester.requestFocus()
+                                keyboardController?.show()
+                            }
+
+                            Row(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .focusRequester(focusRequester)
-                            )
-                            if (textFieldValue.text.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { textFieldValue = TextFieldValue("") },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(15.dp)
-                                    )
+                                    .fillMaxWidth()
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_apple_search),
+                                    contentDescription = "Search",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                BasicTextField(
+                                    value = textFieldValue,
+                                    onValueChange = { textFieldValue = it },
+                                    singleLine = true,
+                                    textStyle = TextStyle(
+                                        color = TextPrimary,
+                                        fontSize = 15.sp,
+                                        fontFamily = FontFamily.Default,
+                                        fontWeight = FontWeight.Normal
+                                    ),
+                                    cursorBrush = SolidColor(AccentBlue),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Uri,
+                                        imeAction = ImeAction.Go
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onGo = {
+                                            if (textFieldValue.text.isNotBlank()) {
+                                                onSubmitUrl(textFieldValue.text)
+                                            }
+                                            onEditUrl(false)
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                        }
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(focusRequester)
+                                )
+                                if (textFieldValue.text.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { textFieldValue = TextFieldValue("") },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    isMinimized -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight()
-                                .clickable(onClick = onRestoreBar)
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = state.displayUrl.ifBlank { state.currentUrl },
-                                fontSize = 12.sp,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    state.isStartPage -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight()
-                                .clickable { onEditUrl(true) }
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_apple_search),
-                                contentDescription = "Search",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Search or enter website",
-                                fontSize = 15.sp,
-                                color = TextSecondary,
-                                fontWeight = FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    else -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight()
-                                .padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        CenterPillMode.Minimized -> {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable(onClick = onOpenBookmarks),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_apple_page_menu),
-                                    contentDescription = "Page Menu & Bookmarks",
-                                    tint = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth()
                                     .fillMaxHeight()
-                                    .clickable { onEditUrl(true) },
+                                    .clickable(onClick = onRestoreBar)
+                                    .padding(horizontal = 14.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = state.displayUrl.ifBlank { state.currentUrl },
-                                    fontSize = 15.sp,
+                                    fontSize = 12.sp,
                                     color = TextPrimary,
                                     fontWeight = FontWeight.Normal,
                                     maxLines = 1,
@@ -420,20 +388,91 @@ fun AppleBottomBar(
                                     textAlign = TextAlign.Center
                                 )
                             }
+                        }
 
-                            Box(
+                        CenterPillMode.StartPage -> {
+                            Row(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable(onClick = onReload),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .fillMaxHeight()
+                                    .clickable { onEditUrl(true) }
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_apple_reload),
-                                    contentDescription = "Reload",
-                                    tint = TextPrimary,
-                                    modifier = Modifier.size(17.dp)
+                                    painter = painterResource(R.drawable.ic_apple_search),
+                                    contentDescription = "Search",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(15.dp)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Search or enter website",
+                                    fontSize = 15.sp,
+                                    color = TextSecondary,
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        CenterPillMode.Browsing -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .clickable(onClick = onOpenBookmarks),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_apple_page_menu),
+                                        contentDescription = "Page Menu & Bookmarks",
+                                        tint = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable { onEditUrl(true) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = state.displayUrl.ifBlank { state.currentUrl },
+                                        fontSize = 15.sp,
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .clickable(onClick = onReload),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_apple_reload),
+                                        contentDescription = "Reload",
+                                        tint = TextPrimary,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -454,63 +493,47 @@ fun AppleBottomBar(
             }
 
             // Island 3: Right Tabs Circle (⧉)
-            AnimatedVisibility(
-                visible = showSideIslands,
-                enter = fadeIn(floatSpring) +
-                    scaleIn(floatSpring, initialScale = 0.82f) +
-                    expandHorizontally(islandSpring, expandFrom = Alignment.End),
-                exit = fadeOut(tween(140)) +
-                    scaleOut(tween(140), targetScale = 0.82f) +
-                    shrinkHorizontally(islandSpring, shrinkTowards = Alignment.End)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+            if (rightIslandWidth > 1.dp) {
+                Spacer(modifier = Modifier.width(rightGap))
+                Box(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .width(rightIslandWidth)
+                        .graphicsLayer {
+                            alpha = sideIslandAlpha
+                            scaleX = 0.85f + (0.15f * sideIslandAlpha)
+                            scaleY = 0.85f + (0.15f * sideIslandAlpha)
+                        }
+                        .liquidGlassIsland(hazeState)
+                        .clickable(enabled = showSideIslands, onClick = onOpenStartPage),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .liquidGlassIsland(hazeState)
-                            .clickable(onClick = onOpenStartPage),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_apple_tabs),
-                            contentDescription = "Tabs / Start Page",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
+                    Icon(
+                        painter = painterResource(R.drawable.ic_apple_tabs),
+                        contentDescription = "Tabs / Start Page",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(19.dp)
+                    )
                 }
             }
 
-            // Right Cancel Action (slides in when editing URL)
-            AnimatedVisibility(
-                visible = state.isEditingUrl,
-                enter = fadeIn(tween(160)) +
-                    slideInHorizontally(
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ) { it / 2 } +
-                    expandHorizontally(islandSpring, expandFrom = Alignment.End),
-                exit = fadeOut(tween(120)) +
-                    slideOutHorizontally(tween(140)) { it / 2 } +
-                    shrinkHorizontally(islandSpring, shrinkTowards = Alignment.End)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+            // Right Cancel Action (expands smoothly when editing URL)
+            if (cancelWidth > 1.dp) {
+                Box(
+                    modifier = Modifier
+                        .width(cancelWidth)
+                        .graphicsLayer { alpha = cancelAlpha },
+                    contentAlignment = Alignment.CenterEnd
                 ) {
-                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "Cancel",
                         color = AccentBlue,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Normal,
+                        maxLines = 1,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
+                            .clickable(enabled = state.isEditingUrl) {
                                 onEditUrl(false)
                                 keyboardController?.hide()
                                 focusManager.clearFocus()

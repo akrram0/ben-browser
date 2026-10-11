@@ -3,6 +3,7 @@ package com.benbrowser
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -29,12 +30,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
@@ -55,22 +60,31 @@ fun BrowserScreen(
     val state by viewModel.state.collectAsState()
     val hazeState = rememberHazeState()
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    // Draw-phase-only tick to invalidate HazeSource when WebView scrolls/repaints (0 recompositions)
+    val webViewDrawTick = remember { mutableIntStateOf(0) }
 
     // Dispatch user-initiated URL loads once without interrupting in-page redirects
     LaunchedEffect(state.pendingUrl, webViewInstance) {
         val targetUrl = state.pendingUrl
         val view = webViewInstance
         if (!targetUrl.isNullOrBlank() && view != null) {
+            view.visibility = View.VISIBLE
             view.loadUrl(targetUrl)
             viewModel.onUrlLoadConsumed()
         }
     }
 
-    // Hide WebView layer on Start Page so stale frames never flash before onPageCommitVisible
+    // Remove WebView from render/layout tree while on Start Page so it never lags animations
     LaunchedEffect(state.isStartPage) {
+        val view = webViewInstance ?: return@LaunchedEffect
         if (state.isStartPage) {
-            webViewInstance?.stopLoading()
-            webViewInstance?.alpha = 0f
+            view.stopLoading()
+            view.alpha = 0f
+            view.visibility = View.GONE
+            webViewDrawTick.intValue++
+        } else {
+            view.visibility = View.VISIBLE
+            webViewDrawTick.intValue++
         }
     }
 
@@ -78,7 +92,11 @@ fun BrowserScreen(
     BackHandler(enabled = !state.isStartPage || state.canGoBack || state.isEditingUrl) {
         when {
             state.isEditingUrl -> viewModel.setEditingUrl(false)
-            webViewInstance?.canGoBack() == true -> webViewInstance?.goBack()
+            webViewInstance?.canGoBack() == true -> {
+                webViewInstance?.visibility = View.VISIBLE
+                webViewInstance?.alpha = 1f
+                webViewInstance?.goBack()
+            }
             else -> viewModel.openStartPage()
         }
     }
@@ -88,11 +106,15 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Haze Source Layer (WebView + Start Page) for Liquid Glass Refraction & Blur
+        // Haze Source Layer (WebView + Start Page) with draw-phase invalidation for live Liquid Glass
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(state = hazeState)
+                .drawWithContent {
+                    webViewDrawTick.intValue
+                    drawContent()
+                }
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -104,6 +126,17 @@ fun BrowserScreen(
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
                         isVerticalScrollBarEnabled = false
                         overScrollMode = View.OVER_SCROLL_NEVER
+                        visibility = View.GONE
+                        alpha = 0f
+
+                        // Prevent WebView from consuming IME insets and reflowing DOM when typing in Bottom Bar
+                        ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                            if (v.hasFocus()) {
+                                ViewCompat.onApplyWindowInsets(v, insets)
+                            } else {
+                                WindowInsetsCompat.CONSUMED
+                            }
+                        }
 
                         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                             WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true)
@@ -130,10 +163,17 @@ fun BrowserScreen(
                             userAgentString = userAgentString.replace("; wv", "")
                         }
 
-                        // Zero-allocation hysteresis scroll listener
+                        // Zero-allocation hysteresis scroll listener + 60fps draw-phase Haze refresh
                         var scrollAccum = 0
                         var latchedMinimized = false
+                        var lastHazeTickMs = 0L
                         setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                            val now = SystemClock.uptimeMillis()
+                            if (now - lastHazeTickMs >= 16L) {
+                                lastHazeTickMs = now
+                                webViewDrawTick.intValue++
+                            }
+
                             val dy = scrollY - oldScrollY
                             if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
                                 scrollAccum = 0
@@ -170,11 +210,13 @@ fun BrowserScreen(
 
                             override fun onPageCommitVisible(view: WebView?, url: String?) {
                                 view?.alpha = 1f
+                                webViewDrawTick.intValue++
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 if (url == "about:blank") return
                                 view?.alpha = 1f
+                                webViewDrawTick.intValue++
                                 viewModel.onPageFinished(url)
                                 viewModel.updateNavigationState(
                                     canGoBack = view?.canGoBack() ?: false,
@@ -208,6 +250,9 @@ fun BrowserScreen(
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                 viewModel.onProgressChanged(newProgress)
+                                if (newProgress == 100) {
+                                    webViewDrawTick.intValue++
+                                }
                             }
 
                             override fun onReceivedTitle(view: WebView?, title: String?) {
@@ -229,18 +274,18 @@ fun BrowserScreen(
             // Safari Start Page Overlay (Spring Scale + Fade Transition)
             AnimatedVisibility(
                 visible = state.isStartPage,
-                enter = fadeIn(animationSpec = tween(200)) +
+                enter = fadeIn(animationSpec = tween(220)) +
                     scaleIn(
                         animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            dampingRatio = Spring.DampingRatioLowBouncy,
                             stiffness = Spring.StiffnessMediumLow
                         ),
-                        initialScale = 0.94f
+                        initialScale = 0.92f
                     ),
-                exit = fadeOut(animationSpec = tween(160)) +
+                exit = fadeOut(animationSpec = tween(180)) +
                     scaleOut(
-                        animationSpec = tween(160),
-                        targetScale = 1.04f
+                        animationSpec = tween(180),
+                        targetScale = 1.05f
                     ),
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -260,6 +305,7 @@ fun BrowserScreen(
             hazeState = hazeState,
             onBack = {
                 if (webViewInstance?.canGoBack() == true) {
+                    webViewInstance?.visibility = View.VISIBLE
                     webViewInstance?.alpha = 1f
                     webViewInstance?.goBack()
                 } else {
@@ -267,6 +313,7 @@ fun BrowserScreen(
                 }
             },
             onForward = {
+                webViewInstance?.visibility = View.VISIBLE
                 webViewInstance?.alpha = 1f
                 webViewInstance?.goForward()
             },
