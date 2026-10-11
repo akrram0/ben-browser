@@ -137,7 +137,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun onPageFinished(url: String?) {
+    fun onLocationChanged(url: String?) {
         val validUrl = url.orEmpty()
         if (validUrl.isBlank() || validUrl == "about:blank") return
         _state.update {
@@ -145,9 +145,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             else it.copy(
                 currentUrl = validUrl,
                 displayUrl = extractDomain(validUrl),
-                isLoading = false,
-                progress = 1f,
                 isCurrentBookmarked = repository.isBookmarked(validUrl)
+            )
+        }
+    }
+
+    fun onPageStop() {
+        _state.update {
+            if (it.isStartPage) it
+            else it.copy(
+                isLoading = false,
+                progress = 1f
             )
         }
     }
@@ -172,15 +180,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _state.update { it.copy(pageTitle = clean) }
     }
 
-    fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
-        val cur = _state.value
-        if (cur.canGoBack == canGoBack && cur.canGoForward == canGoForward) return
-        _state.update {
-            it.copy(
-                canGoBack = canGoBack,
-                canGoForward = canGoForward
-            )
-        }
+    fun setCanGoBack(canGoBack: Boolean) {
+        if (_state.value.canGoBack == canGoBack) return
+        _state.update { it.copy(canGoBack = canGoBack) }
+    }
+
+    fun setCanGoForward(canGoForward: Boolean) {
+        if (_state.value.canGoForward == canGoForward) return
+        _state.update { it.copy(canGoForward = canGoForward) }
     }
 
     private fun resolveUrl(input: String): String = when {

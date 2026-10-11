@@ -33,6 +33,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -48,8 +54,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
 
-    // Modern AndroidX WebKit for WebViewFeature & algorithmic darkening
-    implementation("androidx.webkit:webkit:1.12.1")
+    // Standalone Mozilla GeckoView Engine (WebRender GPU + Multi-Process + TextureView)
+    implementation("org.mozilla.geckoview:geckoview-arm64-v8a:157.0.20261005135250")
 
     // Haze 2.0.1 for Liquid Glass refraction & blur
     implementation("dev.chrisbanes.haze:haze:2.0.1")
