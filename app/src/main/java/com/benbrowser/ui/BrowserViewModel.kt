@@ -17,6 +17,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val _state = MutableStateFlow(
         BrowserState(
             isStartPage = true,
+            searchEngine = repository.getSearchEngine(),
             bookmarks = repository.getBookmarks()
         )
     )
@@ -25,7 +26,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun loadUrl(input: String) {
         val trimmed = input.trim()
         if (trimmed.isBlank()) return
-        val resolved = resolveUrl(trimmed)
+        val resolved = resolveUrl(trimmed, _state.value.searchEngine)
         _state.update {
             it.copy(
                 currentUrl = resolved,
@@ -79,6 +80,34 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _state.update { it.copy(isBarMinimized = target) }
     }
 
+    fun setSearchEngine(engine: String) {
+        repository.setSearchEngine(engine)
+        _state.update { it.copy(searchEngine = engine) }
+    }
+
+    fun addCustomBookmark(title: String, url: String) {
+        if (url.isBlank()) return
+        repository.addBookmark(title, url.trim())
+        val currentUrl = _state.value.currentUrl
+        _state.update {
+            it.copy(
+                isCurrentBookmarked = repository.isBookmarked(currentUrl),
+                bookmarks = repository.getBookmarks()
+            )
+        }
+    }
+
+    fun resetDefaultBookmarks() {
+        val defaults = repository.resetDefaultBookmarks()
+        val currentUrl = _state.value.currentUrl
+        _state.update {
+            it.copy(
+                isCurrentBookmarked = repository.isBookmarked(currentUrl),
+                bookmarks = defaults
+            )
+        }
+    }
+
     fun toggleBookmark() {
         val current = _state.value
         val url = current.currentUrl
@@ -121,6 +150,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 bookmarks = if (show) repository.getBookmarks() else it.bookmarks
             )
         }
+    }
+
+    fun setShowSettingsSheet(show: Boolean) {
+        if (_state.value.showSettingsSheet == show) return
+        _state.update { it.copy(showSettingsSheet = show) }
     }
 
     fun onPageStarted(url: String?) {
@@ -190,11 +224,18 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         _state.update { it.copy(canGoForward = canGoForward) }
     }
 
-    private fun resolveUrl(input: String): String = when {
+    private fun resolveUrl(input: String, engine: String): String = when {
         input.startsWith("http://", ignoreCase = true) ||
             input.startsWith("https://", ignoreCase = true) -> input
         input.contains(".") && !input.contains(" ") -> "https://$input"
-        else -> "https://www.google.com/search?q=${URLEncoder.encode(input, "UTF-8")}"
+        else -> {
+            val encoded = URLEncoder.encode(input, "UTF-8")
+            when (engine) {
+                BookmarkRepository.ENGINE_GOOGLE -> "https://www.google.com/search?q=$encoded"
+                BookmarkRepository.ENGINE_BRAVE -> "https://search.brave.com/search?q=$encoded"
+                else -> "https://duckduckgo.com/?q=$encoded&kae=d"
+            }
+        }
     }
 
     private fun extractDomain(url: String): String = try {

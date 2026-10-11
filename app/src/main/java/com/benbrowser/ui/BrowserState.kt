@@ -1,6 +1,7 @@
 package com.benbrowser.ui
 
 import com.benbrowser.data.Bookmark
+import com.benbrowser.data.BookmarkRepository
 
 data class BrowserState(
     val currentUrl: String = "",
@@ -15,6 +16,8 @@ data class BrowserState(
     val isEditingUrl: Boolean = false,
     val isBarMinimized: Boolean = false,
     val showBookmarksSheet: Boolean = false,
+    val showSettingsSheet: Boolean = false,
     val isCurrentBookmarked: Boolean = false,
+    val searchEngine: String = BookmarkRepository.ENGINE_DUCKDUCKGO,
     val bookmarks: List<Bookmark> = emptyList()
 )

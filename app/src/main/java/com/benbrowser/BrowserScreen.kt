@@ -6,8 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,6 +39,7 @@ import com.benbrowser.ui.BrowserViewModel
 import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
+import com.benbrowser.ui.components.SettingsSheet
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.mozilla.geckoview.GeckoResult
@@ -79,15 +79,10 @@ fun BrowserScreen(
     val state by viewModel.state.collectAsState()
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
-    // Draw-phase-only tick to refresh HazeSource from GeckoView's TextureView surface at 60fps
     val geckoDrawTick = remember { mutableIntStateOf(0) }
 
-    val geckoSession = remember {
-        val runtime = GeckoEngine.getRuntime(context)
-        GeckoSession().apply {
-            open(runtime)
-        }
-    }
+    // Lightweight session creation (0ms); actual native GeckoRuntime opens lazily on first navigation
+    val geckoSession = remember { GeckoSession() }
 
     DisposableEffect(geckoSession) {
         var lastScrollY = 0
@@ -203,7 +198,9 @@ fun BrowserScreen(
         }
 
         onDispose {
-            geckoSession.close()
+            if (geckoSession.isOpen) {
+                geckoSession.close()
+            }
         }
     }
 
@@ -226,10 +223,11 @@ fun BrowserScreen(
     LaunchedEffect(state.isStartPage) {
         val view = geckoViewInstance ?: return@LaunchedEffect
         if (state.isStartPage) {
-            geckoSession.stop()
+            if (geckoSession.isOpen) {
+                geckoSession.stop()
+            }
             view.alpha = 0f
             view.visibility = View.GONE
-            geckoDrawTick.intValue++
         } else {
             view.visibility = View.VISIBLE
             view.alpha = 1f
@@ -272,14 +270,12 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        // TextureView backend enables Compose GraphicsLayer / HazeGlass capture
                         setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
                         coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
                         visibility = View.GONE
                         alpha = 0f
 
-                        // Prevent IME insets from resizing Gecko viewport while typing in Bottom Bar
                         ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
                             if (v.hasFocus()) {
                                 ViewCompat.onApplyWindowInsets(v, insets)
@@ -300,28 +296,23 @@ fun BrowserScreen(
                     .statusBarsPadding()
             )
 
-            // Safari Start Page Overlay (Spring Scale + Fade Transition)
+            // Safari Start Page Overlay (Fast 150ms RenderThread Scale + Fade Transition)
             AnimatedVisibility(
                 visible = state.isStartPage,
-                enter = fadeIn(animationSpec = tween(220)) +
-                    scaleIn(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
-                        initialScale = 0.92f
-                    ),
-                exit = fadeOut(animationSpec = tween(180)) +
-                    scaleOut(
-                        animationSpec = tween(180),
-                        targetScale = 1.05f
-                    ),
+                enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) +
+                    scaleIn(tween(150, easing = FastOutSlowInEasing), initialScale = 0.96f),
+                exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) +
+                    scaleOut(tween(120, easing = FastOutSlowInEasing), targetScale = 1.03f),
                 modifier = Modifier.fillMaxSize()
             ) {
                 AppleStartPage(
                     bookmarks = state.bookmarks,
+                    searchEngine = state.searchEngine,
                     onSelectBookmark = { url ->
                         viewModel.loadUrl(url)
+                    },
+                    onOpenSettings = {
+                        viewModel.setShowSettingsSheet(true)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -390,6 +381,25 @@ fun BrowserScreen(
             },
             onDismiss = {
                 viewModel.setShowBookmarksSheet(false)
+            }
+        )
+    }
+
+    // Settings & Quick Add (+) Modal Sheet
+    if (state.showSettingsSheet) {
+        SettingsSheet(
+            searchEngine = state.searchEngine,
+            onSelectSearchEngine = { engine ->
+                viewModel.setSearchEngine(engine)
+            },
+            onAddBookmark = { title, url ->
+                viewModel.addCustomBookmark(title, url)
+            },
+            onResetBookmarks = {
+                viewModel.resetDefaultBookmarks()
+            },
+            onDismiss = {
+                viewModel.setShowSettingsSheet(false)
             }
         )
     }
