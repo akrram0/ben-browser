@@ -1,7 +1,6 @@
 package com.benbrowser
 
 import android.content.Context
-import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -22,13 +21,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
@@ -83,7 +80,6 @@ fun BrowserScreen(
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
-    val geckoDrawTick = remember { mutableIntStateOf(0) }
 
     val geckoSession = remember { GeckoSession() }
 
@@ -103,7 +99,6 @@ fun BrowserScreen(
         var lastScrollY = 0
         var scrollAccum = 0
         var latchedMinimized = false
-        var lastHazeTickMs = 0L
 
         geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
@@ -113,7 +108,6 @@ fun BrowserScreen(
                 hasUserGesture: Boolean
             ) {
                 viewModel.onLocationChanged(url)
-                geckoDrawTick.intValue++
             }
 
             override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
@@ -143,14 +137,10 @@ fun BrowserScreen(
 
             override fun onProgressChange(session: GeckoSession, progress: Int) {
                 viewModel.onProgressChanged(progress)
-                if (progress == 100) {
-                    geckoDrawTick.intValue++
-                }
             }
 
             override fun onPageStop(session: GeckoSession, success: Boolean) {
                 viewModel.onPageStop()
-                geckoDrawTick.intValue++
             }
         }
 
@@ -161,12 +151,10 @@ fun BrowserScreen(
 
             override fun onFirstContentfulPaint(session: GeckoSession) {
                 geckoViewInstance?.alpha = 1f
-                geckoDrawTick.intValue++
             }
 
             override fun onFirstComposite(session: GeckoSession) {
                 geckoViewInstance?.alpha = 1f
-                geckoDrawTick.intValue++
             }
 
             override fun onCrash(session: GeckoSession) {
@@ -182,29 +170,23 @@ fun BrowserScreen(
 
         geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
             override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
-                val now = SystemClock.uptimeMillis()
-                if (now - lastHazeTickMs >= 16L) {
-                    lastHazeTickMs = now
-                    geckoDrawTick.intValue++
-                }
-
                 val dy = scrollY - lastScrollY
                 lastScrollY = scrollY
                 if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
                     scrollAccum = 0
                 }
                 scrollAccum += dy
-                if (scrollY < 48) {
+                if (scrollY < 60) {
                     scrollAccum = 0
                     if (latchedMinimized) {
                         latchedMinimized = false
                         viewModel.setBarMinimized(false)
                     }
-                } else if (scrollAccum > 56 && scrollY > 120 && !latchedMinimized) {
+                } else if (scrollAccum > 100 && scrollY > 150 && !latchedMinimized) {
                     latchedMinimized = true
                     scrollAccum = 0
                     viewModel.setBarMinimized(true)
-                } else if (scrollAccum < -40 && latchedMinimized) {
+                } else if (scrollAccum < -80 && latchedMinimized) {
                     latchedMinimized = false
                     scrollAccum = 0
                     viewModel.setBarMinimized(false)
@@ -250,7 +232,6 @@ fun BrowserScreen(
         } else {
             view.visibility = View.VISIBLE
             view.alpha = 1f
-            geckoDrawTick.intValue++
         }
     }
 
@@ -272,77 +253,70 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Haze Source Layer (GeckoView TextureView + Start Page) for Live Liquid Glass Refraction
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState)
-                .drawWithContent {
-                    geckoDrawTick.intValue
-                    drawContent()
-                }
-        ) {
-            if (isEngineReady) {
-                AndroidView(
-                    factory = { ctx ->
-                        val runtime = GeckoEngine.getRuntime(ctx)
-                        if (!geckoSession.isOpen) {
-                            geckoSession.open(runtime)
-                        }
-                        GeckoView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
-                            coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
-                            setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                            visibility = if (state.isStartPage) View.GONE else View.VISIBLE
-                            alpha = if (state.isStartPage) 0f else 1f
+        if (isEngineReady) {
+            AndroidView(
+                factory = { ctx ->
+                    val runtime = GeckoEngine.getRuntime(ctx)
+                    if (!geckoSession.isOpen) {
+                        geckoSession.open(runtime)
+                    }
+                    GeckoView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                        coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
+                        setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                        visibility = if (state.isStartPage) View.GONE else View.VISIBLE
+                        alpha = if (state.isStartPage) 0f else 1f
 
-                            ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
-                                if (v.hasFocus()) {
-                                    ViewCompat.onApplyWindowInsets(v, insets)
-                                } else {
-                                    WindowInsetsCompat.CONSUMED
-                                }
+                        ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                            if (v.hasFocus()) {
+                                ViewCompat.onApplyWindowInsets(v, insets)
+                            } else {
+                                WindowInsetsCompat.CONSUMED
                             }
-
-                            setSession(geckoSession)
-                            geckoViewInstance = this
                         }
-                    },
-                    update = { view ->
-                        geckoViewInstance = view
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                )
-            }
 
-            // Safari Start Page Overlay (Fast 150ms RenderThread Scale + Fade Transition)
-            AnimatedVisibility(
-                visible = state.isStartPage,
-                enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) +
-                    scaleIn(tween(150, easing = FastOutSlowInEasing), initialScale = 0.96f),
-                exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) +
-                    scaleOut(tween(120, easing = FastOutSlowInEasing), targetScale = 1.03f),
+                        setSession(geckoSession)
+                        geckoViewInstance = this
+                    }
+                },
+                update = { view ->
+                    geckoViewInstance = view
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
+                    .statusBarsPadding()
+            )
+        }
+
+        // Isolated Start Page Layer: Native 120 FPS refresh with zero Haze render-node overhead
+        AnimatedVisibility(
+            visible = state.isStartPage,
+            enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) +
+                scaleIn(tween(150, easing = FastOutSlowInEasing), initialScale = 0.96f),
+            exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) +
+                scaleOut(tween(120, easing = FastOutSlowInEasing), targetScale = 1.03f),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            AppleStartPage(
+                bookmarks = state.bookmarks,
+                searchEngine = state.searchEngine,
+                isUpdateAvailable = updateInfo.isAvailable,
+                onSelectBookmark = { url ->
+                    viewModel.loadUrl(url)
+                },
+                onOpenSearch = {
+                    viewModel.setEditingUrl(true)
+                },
+                onOpenSettings = {
+                    viewModel.setShowSettingsSheet(true)
+                },
                 modifier = Modifier.fillMaxSize()
-            ) {
-                AppleStartPage(
-                    bookmarks = state.bookmarks,
-                    searchEngine = state.searchEngine,
-                    isUpdateAvailable = updateInfo.isAvailable,
-                    onSelectBookmark = { url ->
-                        viewModel.loadUrl(url)
-                    },
-                    onOpenSettings = {
-                        viewModel.setShowSettingsSheet(true)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            )
         }
 
         // Floating iOS 26 Safari 3-Pill Liquid Glass Bottom Bar
