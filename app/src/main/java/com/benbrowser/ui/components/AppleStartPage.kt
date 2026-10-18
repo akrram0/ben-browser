@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.benbrowser.R
 import com.benbrowser.data.Bookmark
 import com.benbrowser.data.BookmarkRepository
+import com.benbrowser.data.UpdateInfo
 import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.BgCanvas
 import com.benbrowser.theme.GlassBorder
@@ -73,6 +75,7 @@ private val CardBorder = BorderStroke(1.dp, GlassBorder)
 fun AppleStartPage(
     bookmarks: List<Bookmark>,
     searchEngine: String,
+    isUpdateAvailable: Boolean = false,
     onSelectBookmark: (String) -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -131,6 +134,15 @@ fun AppleStartPage(
                     fontWeight = FontWeight.Normal,
                     color = TextPrimary
                 )
+                if (isUpdateAvailable) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(AccentBlue)
+                    )
+                }
             }
         }
 
@@ -262,9 +274,13 @@ private fun FavoriteTile(
 @Composable
 fun SettingsSheet(
     searchEngine: String,
+    updateInfo: UpdateInfo,
     onSelectSearchEngine: (String) -> Unit,
     onAddBookmark: (String, String) -> Unit,
     onResetBookmarks: () -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: () -> Unit,
+    onInstallUpdate: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var titleInput by remember { mutableStateOf("") }
@@ -483,6 +499,114 @@ fun SettingsSheet(
                     fontWeight = FontWeight.Normal,
                     color = TextSecondary
                 )
+            }
+
+            // Section 4: Application Updates (Plan A GitHub Releases)
+            Text(
+                text = "Application Updates",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF22242B))
+                    .border(CardBorder, RoundedCornerShape(12.dp))
+                    .padding(14.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (updateInfo.isAvailable) "Update Available!" else "Ben Browser",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (updateInfo.isAvailable) AccentBlue else TextPrimary
+                            )
+                            Text(
+                                text = if (updateInfo.isAvailable) {
+                                    "New build ${updateInfo.remoteTag.ifBlank { "ready to install" }}"
+                                } else {
+                                    "Up to date with GitHub main"
+                                },
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+
+                        if (updateInfo.isChecking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AccentBlue,
+                                strokeWidth = 2.dp
+                            )
+                        } else if (updateInfo.isDownloading) {
+                            Text(
+                                text = "Downloading...",
+                                fontSize = 13.sp,
+                                color = AccentBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else if (updateInfo.isReadyToInstall) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(AccentBlue)
+                                    .clickable(onClick = onInstallUpdate)
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Install",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            }
+                        } else if (updateInfo.isAvailable) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(AccentBlue)
+                                    .clickable(onClick = onDownloadUpdate)
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Update",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Check",
+                                fontSize = 13.sp,
+                                color = AccentBlue,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable(onClick = onCheckForUpdates)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    if (!updateInfo.errorMessage.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = updateInfo.errorMessage,
+                            fontSize = 11.sp,
+                            color = Color(0xFFFF453A)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(28.dp))

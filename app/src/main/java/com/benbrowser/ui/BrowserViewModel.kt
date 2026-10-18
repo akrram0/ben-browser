@@ -2,17 +2,31 @@ package com.benbrowser.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.benbrowser.data.AppUpdater
 import com.benbrowser.data.BookmarkRepository
+import com.benbrowser.data.UpdateInfo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.net.URI
 import java.net.URLEncoder
 import kotlin.math.abs
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BookmarkRepository(application)
+    private val appUpdater = AppUpdater(application)
+    val updateState: StateFlow<UpdateInfo> = appUpdater.updateState
+
+    init {
+        viewModelScope.launch {
+            delay(3000)
+            appUpdater.checkForUpdates()
+        }
+    }
 
     private val _state = MutableStateFlow(
         BrowserState(
@@ -22,6 +36,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         )
     )
     val state: StateFlow<BrowserState> = _state.asStateFlow()
+
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            appUpdater.checkForUpdates()
+        }
+    }
+
+    fun startUpdateDownload() {
+        appUpdater.startDownloadAndInstall()
+    }
+
+    fun installDownloadedUpdate() {
+        appUpdater.promptInstall()
+    }
 
     fun loadUrl(input: String) {
         val trimmed = input.trim()

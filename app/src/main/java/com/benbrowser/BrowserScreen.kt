@@ -79,6 +79,7 @@ fun BrowserScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val updateInfo by viewModel.updateState.collectAsState()
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
@@ -332,6 +333,7 @@ fun BrowserScreen(
                 AppleStartPage(
                     bookmarks = state.bookmarks,
                     searchEngine = state.searchEngine,
+                    isUpdateAvailable = updateInfo.isAvailable,
                     onSelectBookmark = { url ->
                         viewModel.loadUrl(url)
                     },
@@ -413,6 +415,7 @@ fun BrowserScreen(
     if (state.showSettingsSheet) {
         SettingsSheet(
             searchEngine = state.searchEngine,
+            updateInfo = updateInfo,
             onSelectSearchEngine = { engine ->
                 viewModel.setSearchEngine(engine)
             },
@@ -421,6 +424,15 @@ fun BrowserScreen(
             },
             onResetBookmarks = {
                 viewModel.resetDefaultBookmarks()
+            },
+            onCheckForUpdates = {
+                viewModel.checkForUpdates()
+            },
+            onDownloadUpdate = {
+                viewModel.startUpdateDownload()
+            },
+            onInstallUpdate = {
+                viewModel.installDownloadedUpdate()
             },
             onDismiss = {
                 viewModel.setShowSettingsSheet(false)

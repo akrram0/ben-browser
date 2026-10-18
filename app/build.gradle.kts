@@ -13,6 +13,9 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+
+        val buildEpoch = System.currentTimeMillis()
+        buildConfigField("long", "BUILD_TIME", "${buildEpoch}L")
     }
 
     buildTypes {
@@ -32,6 +35,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
