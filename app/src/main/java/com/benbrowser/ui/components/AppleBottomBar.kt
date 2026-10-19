@@ -1,8 +1,8 @@
 package com.benbrowser.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -70,7 +70,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.benbrowser.R
@@ -83,8 +82,10 @@ import com.benbrowser.theme.TextSecondary
 import com.benbrowser.ui.BrowserState
 import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.GlassStyle
+import dev.chrisbanes.haze.glass.RefractionProfile
 import dev.chrisbanes.haze.glass.hazeGlass
 import kotlin.math.abs
 
@@ -98,13 +99,38 @@ private enum class BarLayoutState {
  * BitChord-inspired spring motion:
  * Damping ratio 0.72 = settles in one soft pass beyond the mark without endless wobbling.
  * Stiffness 320 = crisp arrival at roughly 300ms.
+ *
+ * (Applied to a plain [Animatable] in [AppleBottomBar] so the morph is a draw-phase
+ * transform only — see the morph math there.)
  */
-private val BitChordDpSpring = spring<Dp>(dampingRatio = 0.72f, stiffness = 320f)
 
 private const val STRETCH = 0.16f
 private const val SQUASH = 0.5f
 
 private val PillShape = RoundedCornerShape(percent = 50)
+
+/**
+ * Hoisted so the style instance is identity-stable across recompositions: GlassStyle has no
+ * value equality, so rebuilding it inline forced Haze to re-plan every frame.
+ *
+ * Fixed optics (instead of `regular`'s responsive defaults: blurRadius 20–25dp, depth 0.65–1)
+ * cut per-frame cost: a single 14dp blurred sample, depth 0 (no extra sample), detail 0.
+ */
+private val BarGlassStyle = GlassStyle.regular.then {
+    shape(PillShape)
+    tint(Color(0x6616181D))
+    optics(
+        refractionStrength = 0.7f,
+        refractionHeightFraction = 0.15f,
+        refractionDisplacement = 48.dp,
+        depth = 0f,
+        blurRadius = 14.dp,
+        progressive = null,
+        refractionFoldStrength = 0f,
+        refractionDetailIntensity = 0f,
+        refractionProfile = RefractionProfile.Edge(20.dp)
+    )
+}
 
 private val GlassFillBrush = Brush.verticalGradient(
     colors = listOf(
@@ -138,10 +164,9 @@ private fun Modifier.bitChordGlassSurface(
     this
         .hazeGlass(
             input = HazeInput.Sources(hazeState),
-            style = GlassStyle.regular.then {
-                shape(PillShape)
-                tint(Color(0x6616181D))
-            }
+            style = BarGlassStyle,
+            // 0f = floor for weakest devices, 0.5f = library default, raise if glass looks too soft.
+            performanceMode = HazePerformanceMode.Fixed(0.35f)
         )
         .border(GlassSpecularBorder, PillShape)
         .clip(PillShape)
@@ -204,32 +229,38 @@ fun AppleBottomBar(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
     val expandedWidth = (screenWidthDp - 28.dp).coerceAtLeast(280.dp)
     val collapsedWidth = 180.dp
+    val collapsedHeight = 38.dp
 
     val targetWidth = when (barState) {
         BarLayoutState.Collapsed -> collapsedWidth
         else -> expandedWidth
     }
     val targetHeight = when (barState) {
-        BarLayoutState.Collapsed -> 38.dp
+        BarLayoutState.Collapsed -> collapsedHeight
         else -> 52.dp
     }
 
-    val animatedWidth by animateDpAsState(
-        targetValue = targetWidth,
-        animationSpec = BitChordDpSpring,
-        label = "bitchord_bar_width"
-    )
-    val animatedHeight by animateDpAsState(
-        targetValue = targetHeight,
-        animationSpec = BitChordDpSpring,
-        label = "bitchord_bar_height"
-    )
-
-    // BitChord liquid momentum deformation (squash & stretch while traveling)
-    val travelDistance = abs(targetWidth.value - animatedWidth.value)
-    val lag = (travelDistance / 140f).coerceIn(0f, 1f)
-    val morphScaleX = 1f + lag * (STRETCH * 0.35f)
-    val morphScaleY = 1f - lag * (STRETCH * SQUASH * 0.35f)
+    // Morph driver: one 0..1 fraction easing from the previous size to the new one.
+    // The glass node itself keeps the constant (target) size; the apparent resize is drawn
+    // purely as a graphicsLayer transform, so Haze's effect node never changes size per frame.
+    val morph = remember { Animatable(1f) }
+    // Node layout follows the last SETTLED target size: it stays at the old size while the morph
+    // animates, so the draw-phase transform is already correct on the first frame after a state
+    // change (no pop), and Haze only ever sees a size change while the bar is at rest.
+    val settledSize = remember { mutableStateOf(targetWidth to targetHeight) }
+    var fromSize by remember { mutableStateOf(targetWidth to targetHeight) }
+    var toSize by remember { mutableStateOf(targetWidth to targetHeight) }
+    LaunchedEffect(targetWidth, targetHeight) {
+        val target = targetWidth to targetHeight
+        if (settledSize.value == target) return@LaunchedEffect
+        fromSize = settledSize.value
+        toSize = target
+        morph.snapTo(0f)
+        // Same BitChord feel: damping 0.72 / stiffness 320.
+        morph.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 320f))
+        // Apparent size is unchanged by this snap (the transform resolves to 1 at the new size).
+        settledSize.value = target
+    }
 
     Box(
         modifier = modifier
@@ -245,15 +276,39 @@ fun AppleBottomBar(
             ),
         contentAlignment = Alignment.BottomCenter
     ) {
+        // Glass layer: constant-size Haze node. The morph is a draw-phase-only transform, so
+        // the state reads (morph/fromSize/toSize) happen inside the lambda and never trigger
+        // layout or invalidate Haze's retained output mid-scroll.
         Box(
             modifier = Modifier
-                .width(animatedWidth)
-                .height(animatedHeight)
+                .width(settledSize.value.first)
+                .height(settledSize.value.second)
                 .graphicsLayer {
-                    scaleX = morphScaleX
-                    scaleY = morphScaleY
+                    val p = morph.value
+                    val nodeW = settledSize.value.first.value
+                    val nodeH = settledSize.value.second.value
+                    // Apparent size reproduces the old spring-animated width/height.
+                    val apparentW = fromSize.first.value + (toSize.first.value - fromSize.first.value) * p
+                    val apparentH = fromSize.second.value + (toSize.second.value - fromSize.second.value) * p
+
+                    // BitChord liquid momentum deformation (squash & stretch while traveling)
+                    val travel = abs(nodeW - apparentW)
+                    val lag = (travel / 140f).coerceIn(0f, 1f)
+                    val squashX = 1f + lag * (STRETCH * 0.35f)
+                    val squashY = 1f - lag * (STRETCH * SQUASH * 0.35f)
+
+                    scaleX = if (nodeW > 0f) (apparentW / nodeW) * squashX else 1f
+                    scaleY = if (nodeH > 0f) (apparentH / nodeH) * squashY else 1f
                 }
-                .bitChordGlassSurface(hazeState, useLiveShader = useLiveShader),
+                .bitChordGlassSurface(hazeState, useLiveShader = useLiveShader)
+        )
+
+        // Content layer: sibling at the constant target size. Content snaps to the new size
+        // rather than scaling with the pill, so the collapsed URL row can't overflow it.
+        Box(
+            modifier = Modifier
+                .width(settledSize.value.first)
+                .height(settledSize.value.second),
             contentAlignment = Alignment.Center
         ) {
             AnimatedContent(
@@ -273,7 +328,8 @@ fun AppleBottomBar(
                     BarLayoutState.Collapsed -> {
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .width(collapsedWidth)
+                                .height(collapsedHeight)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
