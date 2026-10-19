@@ -82,7 +82,7 @@ fun BrowserScreen(
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
-    var liveGlassEnabled by rememberSaveable { mutableStateOf(true) }
+    var liveGlassEnabled by rememberSaveable { mutableStateOf(false) }
 
     val geckoSession = remember { GeckoSession() }
 
@@ -268,7 +268,11 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                        // A/B test of the GeckoView renderer for scroll smoothness.
+                        // TextureView was chosen originally so Haze could sample the
+                        // WebView surface; SurfaceView is Mozilla's faster backend but
+                        // cannot be captured by Compose/Haze.
+                        setViewBackend(GeckoView.BACKEND_SURFACE_VIEW)
                         coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
                         visibility = if (state.isStartPage) View.GONE else View.VISIBLE
