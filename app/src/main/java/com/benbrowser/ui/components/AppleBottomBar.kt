@@ -253,7 +253,12 @@ fun AppleBottomBar(
     LaunchedEffect(targetWidth, targetHeight) {
         val target = targetWidth to targetHeight
         if (settledSize.value == target) return@LaunchedEffect
-        fromSize = settledSize.value
+        // Seed from the CURRENT apparent size (not the settled one) so interrupting an
+        // in-flight morph never jumps the pill back to a stale size.
+        val p = morph.value
+        val apparentW = fromSize.first.value + (toSize.first.value - fromSize.first.value) * p
+        val apparentH = fromSize.second.value + (toSize.second.value - fromSize.second.value) * p
+        fromSize = apparentW.dp to apparentH.dp
         toSize = target
         morph.snapTo(0f)
         // Same BitChord feel: damping 0.72 / stiffness 320.
