@@ -3,6 +3,7 @@ package com.benbrowser
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -23,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +82,7 @@ fun BrowserScreen(
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
+    var liveGlassEnabled by rememberSaveable { mutableStateOf(true) }
 
     val geckoSession = remember { GeckoSession() }
 
@@ -288,7 +291,7 @@ fun BrowserScreen(
                 },
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState)
+                    .then(if (liveGlassEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                     .statusBarsPadding()
             )
         }
@@ -356,6 +359,15 @@ fun BrowserScreen(
             },
             onRestoreBar = {
                 viewModel.setBarMinimized(false)
+            },
+            liveGlassEnabled = liveGlassEnabled,
+            onToggleLiveGlass = {
+                liveGlassEnabled = !liveGlassEnabled
+                Toast.makeText(
+                    context,
+                    if (liveGlassEnabled) "Haze glass: ON (live blur)" else "Haze glass: OFF (frosted fallback)",
+                    Toast.LENGTH_SHORT
+                ).show()
             },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
