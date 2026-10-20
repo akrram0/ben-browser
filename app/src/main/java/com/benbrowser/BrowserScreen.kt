@@ -15,6 +15,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -38,6 +40,7 @@ import com.benbrowser.ui.BrowserViewModel
 import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
+import com.benbrowser.ui.components.FrameStatsHud
 import com.benbrowser.ui.components.SettingsSheet
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -46,6 +49,10 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
+
+// Diagnostic: the bar's scroll-triggered spring morph is the only per-frame layout work
+// during a scroll gesture. Disabled here to measure whether it causes the scroll jank.
+private const val AUTO_COLLAPSE_ON_SCROLL = false
 
 private object GeckoEngine {
     @Volatile
@@ -82,7 +89,7 @@ fun BrowserScreen(
     val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
-    var liveGlassEnabled by rememberSaveable { mutableStateOf(false) }
+    var liveGlassEnabled by rememberSaveable { mutableStateOf(true) }
 
     val geckoSession = remember { GeckoSession() }
 
@@ -173,6 +180,7 @@ fun BrowserScreen(
 
         geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
             override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
+                if (!AUTO_COLLAPSE_ON_SCROLL) return
                 val dy = scrollY - lastScrollY
                 lastScrollY = scrollY
                 if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
@@ -268,11 +276,10 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        // A/B test of the GeckoView renderer for scroll smoothness.
-                        // TextureView was chosen originally so Haze could sample the
-                        // WebView surface; SurfaceView is Mozilla's faster backend but
-                        // cannot be captured by Compose/Haze.
-                        setViewBackend(GeckoView.BACKEND_SURFACE_VIEW)
+                        // TextureView is required so Compose/Haze can sample the page.
+                        // SurfaceView punches through the Compose window and rendered
+                        // the page as a fully black screen under the Haze layer.
+                        setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
                         coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
                         visibility = if (state.isStartPage) View.GONE else View.VISIBLE
@@ -374,6 +381,13 @@ fun BrowserScreen(
                 ).show()
             },
             modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        FrameStatsHud(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(8.dp)
         )
     }
 
