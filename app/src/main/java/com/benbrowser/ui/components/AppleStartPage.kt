@@ -1,10 +1,13 @@
 package com.benbrowser.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -62,23 +66,23 @@ import com.benbrowser.theme.TextSecondary
 import java.util.Calendar
 
 private val LiquidGlassPillBorder = BorderStroke(
-    width = 0.5.dp,
+    width = 1.dp,
     brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0x40FFFFFF),
-            Color(0x14FFFFFF)
+            Color(0x60FFFFFF),
+            Color(0x18FFFFFF)
         )
     )
 )
 
 private val LiquidGlassFillBrush = Brush.verticalGradient(
     colors = listOf(
-        Color(0x28FFFFFF),
-        Color(0x10FFFFFF)
+        Color(0x352E3444),
+        Color(0x1E1A1E28)
     )
 )
 
-private val TileShape = RoundedCornerShape(16.dp)
+private val TileShape = RoundedCornerShape(18.dp)
 
 private val GREETINGS = listOf(
     "What are we cooking today?",
@@ -101,7 +105,12 @@ fun AppleStartPage(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val rows = remember(bookmarks) { bookmarks.chunked(4) }
+    // Append a dedicated "+ Add" item at the end of the bookmarks list
+    val allItems = remember(bookmarks) {
+        bookmarks + Bookmark("fav_add_custom", "+ Add", "", 0L)
+    }
+    val rows = remember(allItems) { allItems.chunked(4) }
+
     val greeting = remember { GREETINGS.random() }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val vibeSubtitle = remember(currentHour) {
@@ -125,14 +134,14 @@ fun AppleStartPage(
                 .widthIn(max = FLOATING_BAR_MAX_WIDTH)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .padding(bottom = 90.dp)
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .padding(bottom = 100.dp)
         ) {
             // Section 1: Dynamic Gen-Z Welcome Header + Liquid Glass Settings Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 20.dp),
+                    .padding(bottom = 22.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -194,7 +203,7 @@ fun AppleStartPage(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(52.dp)
                     .clip(CircleShape)
                     .background(LiquidGlassFillBrush, CircleShape)
                     .border(LiquidGlassPillBorder, CircleShape)
@@ -203,7 +212,7 @@ fun AppleStartPage(
                         indication = null,
                         onClick = onOpenSearch
                     )
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 18.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Row(
@@ -214,11 +223,11 @@ fun AppleStartPage(
                         painter = painterResource(R.drawable.ic_apple_search),
                         contentDescription = "Search",
                         tint = TextSecondary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Search or enter address...",
+                        text = "Search the void or enter address...",
                         fontSize = 14.sp,
                         color = TextSecondary,
                         fontWeight = FontWeight.Normal,
@@ -227,13 +236,13 @@ fun AppleStartPage(
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(30.dp))
 
             // Section 3: Favorites Section Title
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 18.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -243,35 +252,31 @@ fun AppleStartPage(
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
-
-                Text(
-                    text = "+ Add",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AccentBlue,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onOpenSettings)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
             }
 
-            // Section 4: 4-Column Pure Liquid Glass App Icons Grid
+            // Section 4: 4-Column Liquid Glass App Icons Grid
             rows.forEach { rowItems ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 20.dp),
+                        .padding(bottom = 22.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     for (i in 0 until 4) {
-                        val bookmark = rowItems.getOrNull(i)
-                        if (bookmark != null) {
-                            FavoriteTile(
-                                bookmark = bookmark,
-                                onClick = { onSelectBookmark(bookmark.url) },
-                                modifier = Modifier.weight(1f)
-                            )
+                        val item = rowItems.getOrNull(i)
+                        if (item != null) {
+                            if (item.id == "fav_add_custom") {
+                                AddTile(
+                                    onClick = onOpenSettings,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                FavoriteTile(
+                                    bookmark = item,
+                                    onClick = { onSelectBookmark(item.url) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         } else {
                             Spacer(modifier = Modifier.weight(1f))
                         }
@@ -288,34 +293,48 @@ private fun FavoriteTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cleanUrl = bookmark.url.lowercase()
-    val cleanTitle = bookmark.title.lowercase()
-
-    val brandDrawableId = when {
-        cleanUrl.contains("duckduckgo") || cleanTitle.contains("duckduckgo") -> R.drawable.ic_brand_duckduckgo
-        cleanUrl.contains("github") || cleanTitle.contains("github") -> R.drawable.ic_brand_github
-        cleanUrl.contains("youtube") || cleanTitle.contains("youtube") -> R.drawable.ic_brand_youtube
-        cleanUrl.contains("apple") || cleanTitle.contains("apple") -> R.drawable.ic_brand_apple
-        cleanUrl.contains("wikipedia") || cleanTitle.contains("wikipedia") -> R.drawable.ic_brand_wikipedia
-        cleanUrl.contains("ycombinator") || cleanTitle.contains("hacker") -> R.drawable.ic_brand_hackernews
-        cleanUrl.contains("reddit") || cleanTitle.contains("reddit") -> R.drawable.ic_brand_reddit
-        cleanUrl.contains("google") || cleanTitle.contains("google") -> R.drawable.ic_brand_google
-        cleanUrl.contains("x.com") || cleanUrl.contains("twitter") || cleanTitle.contains("twitter") || cleanTitle == "x" -> R.drawable.ic_brand_x
-        else -> null
+    val brandDrawableId = remember(bookmark.url, bookmark.title) {
+        val cleanUrl = bookmark.url.lowercase()
+        val cleanTitle = bookmark.title.lowercase()
+        when {
+            cleanUrl.contains("duckduckgo") || cleanTitle.contains("duckduckgo") -> R.drawable.ic_brand_duckduckgo
+            cleanUrl.contains("github") || cleanTitle.contains("github") -> R.drawable.ic_brand_github
+            cleanUrl.contains("youtube") || cleanTitle.contains("youtube") -> R.drawable.ic_brand_youtube
+            cleanUrl.contains("apple") || cleanTitle.contains("apple") -> R.drawable.ic_brand_apple
+            cleanUrl.contains("wikipedia") || cleanTitle.contains("wikipedia") -> R.drawable.ic_brand_wikipedia
+            cleanUrl.contains("ycombinator") || cleanTitle.contains("hacker") -> R.drawable.ic_brand_hackernews
+            cleanUrl.contains("reddit") || cleanTitle.contains("reddit") -> R.drawable.ic_brand_reddit
+            cleanUrl.contains("google") || cleanTitle.contains("google") -> R.drawable.ic_brand_google
+            cleanUrl.contains("x.com") || cleanUrl.contains("twitter") || cleanTitle.contains("twitter") || cleanTitle == "x" -> R.drawable.ic_brand_x
+            else -> null
+        }
     }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 320f),
+        label = "tile_press"
+    )
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick
-        )
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
     ) {
         // Individual Liquid Glass Container with Specular Glass Border
         Box(
             modifier = Modifier
-                .size(58.dp)
+                .size(62.dp)
                 .clip(TileShape)
                 .background(LiquidGlassFillBrush, TileShape)
                 .border(LiquidGlassPillBorder, TileShape),
@@ -325,30 +344,86 @@ private fun FavoriteTile(
                 Icon(
                     painter = painterResource(brandDrawableId),
                     contentDescription = bookmark.title,
-                    tint = Color.White.copy(alpha = 0.95f),
-                    modifier = Modifier.size(28.dp)
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(34.dp)
                 )
             } else {
                 val monogram = bookmark.title.trim().take(2).uppercase().ifBlank { "?" }
                 Text(
                     text = monogram,
                     color = TextPrimary,
-                    fontSize = 16.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(7.dp))
 
         Text(
             text = bookmark.title,
             color = TextSecondary,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun AddTile(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 320f),
+        label = "add_press"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(TileShape)
+                .background(Color(0x18FFFFFF), TileShape)
+                .border(BorderStroke(1.dp, Color(0x28FFFFFF)), TileShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "+",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Light,
+                color = AccentBlue
+            )
+        }
+
+        Spacer(modifier = Modifier.height(7.dp))
+
+        Text(
+            text = "Add",
+            color = TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
             modifier = Modifier.fillMaxWidth()
         )
     }

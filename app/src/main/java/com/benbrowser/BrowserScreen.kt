@@ -53,10 +53,10 @@ private object GeckoEngine {
                 GeckoRuntimeSettings.Builder()
                     .javaScriptEnabled(true)
                     .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_DARK)
-                    .doubleTapZoomingEnabled(true)
-                    .inputAutoZoomEnabled(true)
+                    .doubleTapZoomingEnabled(false)
+                    .inputAutoZoomEnabled(false)
                     .forceUserScalableEnabled(true)
-                    .automaticFontSizeAdjustment(true)
+                    .automaticFontSizeAdjustment(false)
                     .globalPrivacyControlEnabled(true)
                     .build()
             ).also { runtime = it }
@@ -155,7 +155,40 @@ fun BrowserScreen(
             }
         }
 
+        var lastScrollY = 0
+        var scrollAccum = 0
+        var latchedMinimized = false
+
+        geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
+            override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
+                val dy = scrollY - lastScrollY
+                lastScrollY = scrollY
+
+                if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
+                    scrollAccum = 0
+                }
+                scrollAccum += dy
+
+                if (scrollY < 60) {
+                    scrollAccum = 0
+                    if (latchedMinimized) {
+                        latchedMinimized = false
+                        viewModel.setBarMinimized(false)
+                    }
+                } else if (scrollAccum > 120 && scrollY > 160 && !latchedMinimized) {
+                    latchedMinimized = true
+                    scrollAccum = 0
+                    viewModel.setBarMinimized(true)
+                } else if (scrollAccum < -90 && latchedMinimized) {
+                    latchedMinimized = false
+                    scrollAccum = 0
+                    viewModel.setBarMinimized(false)
+                }
+            }
+        }
+
         onDispose {
+            geckoSession.scrollDelegate = null
             if (geckoSession.isOpen) {
                 geckoSession.close()
             }
@@ -296,6 +329,9 @@ fun BrowserScreen(
             },
             onEditUrl = { editing ->
                 viewModel.setEditingUrl(editing)
+            },
+            onRestoreBar = {
+                viewModel.setBarMinimized(false)
             },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
