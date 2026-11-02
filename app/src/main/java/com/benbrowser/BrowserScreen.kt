@@ -3,20 +3,15 @@ package com.benbrowser
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,12 +20,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -40,19 +33,12 @@ import com.benbrowser.ui.BrowserViewModel
 import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
-import com.benbrowser.ui.components.FrameStatsHud
 import com.benbrowser.ui.components.SettingsSheet
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
-
-// Diagnostic: the bar's scroll-triggered spring morph is the only per-frame layout work
-// during a scroll gesture. Disabled here to measure whether it causes the scroll jank.
-private const val AUTO_COLLAPSE_ON_SCROLL = false
 
 private object GeckoEngine {
     @Volatile
@@ -86,17 +72,15 @@ fun BrowserScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val updateInfo by viewModel.updateState.collectAsState()
-    val hazeState = rememberHazeState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
-    var liveGlassEnabled by rememberSaveable { mutableStateOf(true) }
 
     val geckoSession = remember { GeckoSession() }
 
-    // Pre-warm GeckoRuntime 180ms after first frame so cold start opens instantly and never attaches GeckoView before MozGlue loads
+    // Pre-warm GeckoRuntime 100ms after first frame so cold start opens instantly
     LaunchedEffect(Unit) {
         if (!isEngineReady) {
-            kotlinx.coroutines.delay(180)
+            kotlinx.coroutines.delay(100)
         }
         val runtime = GeckoEngine.getRuntime(context)
         if (!geckoSession.isOpen) {
@@ -106,10 +90,6 @@ fun BrowserScreen(
     }
 
     DisposableEffect(geckoSession) {
-        var lastScrollY = 0
-        var scrollAccum = 0
-        var latchedMinimized = false
-
         geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
                 session: GeckoSession,
@@ -139,9 +119,6 @@ fun BrowserScreen(
 
         geckoSession.progressDelegate = object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
-                lastScrollY = 0
-                scrollAccum = 0
-                latchedMinimized = false
                 viewModel.onPageStarted(url)
             }
 
@@ -178,33 +155,6 @@ fun BrowserScreen(
             }
         }
 
-        geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
-            override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
-                if (!AUTO_COLLAPSE_ON_SCROLL) return
-                val dy = scrollY - lastScrollY
-                lastScrollY = scrollY
-                if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
-                    scrollAccum = 0
-                }
-                scrollAccum += dy
-                if (scrollY < 60) {
-                    scrollAccum = 0
-                    if (latchedMinimized) {
-                        latchedMinimized = false
-                        viewModel.setBarMinimized(false)
-                    }
-                } else if (scrollAccum > 100 && scrollY > 150 && !latchedMinimized) {
-                    latchedMinimized = true
-                    scrollAccum = 0
-                    viewModel.setBarMinimized(true)
-                } else if (scrollAccum < -80 && latchedMinimized) {
-                    latchedMinimized = false
-                    scrollAccum = 0
-                    viewModel.setBarMinimized(false)
-                }
-            }
-        }
-
         onDispose {
             if (geckoSession.isOpen) {
                 geckoSession.close()
@@ -212,7 +162,7 @@ fun BrowserScreen(
         }
     }
 
-    // Dispatch user-initiated URL loads once without interrupting in-page redirects
+    // Dispatch user-initiated URL loads immediately
     LaunchedEffect(state.pendingUrl, geckoViewInstance) {
         val targetUrl = state.pendingUrl
         if (!targetUrl.isNullOrBlank()) {
@@ -223,7 +173,6 @@ fun BrowserScreen(
             isEngineReady = true
             val view = geckoViewInstance
             if (view != null) {
-                view.visibility = View.VISIBLE
                 view.alpha = 1f
                 geckoSession.loadUri(targetUrl)
                 viewModel.onUrlLoadConsumed()
@@ -231,19 +180,10 @@ fun BrowserScreen(
         }
     }
 
-    // Isolate GeckoView when on Start Page so Start Page animations run at locked 120fps
+    // Toggle GeckoView alpha: stays warm in the hierarchy so TextureView is never destroyed
     LaunchedEffect(state.isStartPage, geckoViewInstance) {
         val view = geckoViewInstance ?: return@LaunchedEffect
-        if (state.isStartPage) {
-            if (geckoSession.isOpen) {
-                geckoSession.stop()
-            }
-            view.alpha = 0f
-            view.visibility = View.GONE
-        } else {
-            view.visibility = View.VISIBLE
-            view.alpha = 1f
-        }
+        view.alpha = if (state.isStartPage) 0f else 1f
     }
 
     // System Back Handler: edit mode -> Gecko history -> start page -> exit
@@ -251,7 +191,6 @@ fun BrowserScreen(
         when {
             state.isEditingUrl -> viewModel.setEditingUrl(false)
             state.canGoBack && !state.isStartPage -> {
-                geckoViewInstance?.visibility = View.VISIBLE
                 geckoViewInstance?.alpha = 1f
                 geckoSession.goBack()
             }
@@ -276,13 +215,10 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        // TextureView is required so Compose/Haze can sample the page.
-                        // SurfaceView punches through the Compose window and rendered
-                        // the page as a fully black screen under the Haze layer.
                         setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
-                        coverUntilFirstPaint(android.graphics.Color.parseColor("#0B0C0E"))
                         setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                        visibility = if (state.isStartPage) View.GONE else View.VISIBLE
+                        // Keep View.VISIBLE so SurfaceTexture is never destroyed
+                        visibility = View.VISIBLE
                         alpha = if (state.isStartPage) 0f else 1f
 
                         ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
@@ -299,21 +235,17 @@ fun BrowserScreen(
                 },
                 update = { view ->
                     geckoViewInstance = view
+                    view.alpha = if (state.isStartPage) 0f else 1f
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (liveGlassEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
-                    .statusBarsPadding()
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        // Isolated Start Page Layer: Native 120 FPS refresh with zero Haze render-node overhead
+        // Start Page Overlay: 120 FPS native scroll performance
         AnimatedVisibility(
             visible = state.isStartPage,
-            enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) +
-                scaleIn(tween(150, easing = FastOutSlowInEasing), initialScale = 0.96f),
-            exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) +
-                scaleOut(tween(120, easing = FastOutSlowInEasing), targetScale = 1.03f),
+            enter = fadeIn(tween(140, easing = FastOutSlowInEasing)),
+            exit = fadeOut(tween(110, easing = FastOutSlowInEasing)),
             modifier = Modifier.fillMaxSize()
         ) {
             AppleStartPage(
@@ -333,13 +265,11 @@ fun BrowserScreen(
             )
         }
 
-        // Floating iOS 26 Safari 3-Pill Liquid Glass Bottom Bar
+        // Floating iOS 26 Safari / BitChord Liquid Glass Bottom Bar
         AppleBottomBar(
             state = state,
-            hazeState = hazeState,
             onBack = {
                 if (state.canGoBack && !state.isStartPage) {
-                    geckoViewInstance?.visibility = View.VISIBLE
                     geckoViewInstance?.alpha = 1f
                     geckoSession.goBack()
                 } else {
@@ -348,7 +278,6 @@ fun BrowserScreen(
             },
             onForward = {
                 if (state.canGoForward) {
-                    geckoViewInstance?.visibility = View.VISIBLE
                     geckoViewInstance?.alpha = 1f
                     geckoSession.goForward()
                 }
@@ -368,26 +297,7 @@ fun BrowserScreen(
             onEditUrl = { editing ->
                 viewModel.setEditingUrl(editing)
             },
-            onRestoreBar = {
-                viewModel.setBarMinimized(false)
-            },
-            liveGlassEnabled = liveGlassEnabled,
-            onToggleLiveGlass = {
-                liveGlassEnabled = !liveGlassEnabled
-                Toast.makeText(
-                    context,
-                    if (liveGlassEnabled) "Haze glass: ON (live blur)" else "Haze glass: OFF (frosted fallback)",
-                    Toast.LENGTH_SHORT
-                ).show()
-            },
             modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-        FrameStatsHud(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(8.dp)
         )
     }
 

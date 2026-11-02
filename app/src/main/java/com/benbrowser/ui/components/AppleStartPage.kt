@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,16 +57,15 @@ import com.benbrowser.data.BookmarkRepository
 import com.benbrowser.data.UpdateInfo
 import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.BgCanvas
-import com.benbrowser.theme.GlassBorder
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import java.util.Calendar
 
 private val LiquidGlassPillBorder = BorderStroke(
-    width = 1.dp,
+    width = 0.5.dp,
     brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0x38FFFFFF),
+            Color(0x40FFFFFF),
             Color(0x14FFFFFF)
         )
     )
@@ -73,12 +73,12 @@ private val LiquidGlassPillBorder = BorderStroke(
 
 private val LiquidGlassFillBrush = Brush.verticalGradient(
     colors = listOf(
-        Color(0x2E252834),
-        Color(0x1A15171F)
+        Color(0x28FFFFFF),
+        Color(0x10FFFFFF)
     )
 )
 
-private val TileShape = RoundedCornerShape(18.dp)
+private val TileShape = RoundedCornerShape(16.dp)
 
 private val GREETINGS = listOf(
     "What are we cooking today?",
@@ -113,147 +113,168 @@ fun AppleStartPage(
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(BgCanvas)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = 22.dp,
-                end = 22.dp,
-                top = 24.dp,
-                bottom = 120.dp
-            )
+            .statusBarsPadding(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Section 1: Dynamic Gen-Z Welcome Header + Liquid Glass Settings Button
-        Row(
+        Column(
             modifier = Modifier
+                .widthIn(max = FLOATING_BAR_MAX_WIDTH)
                 .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(bottom = 90.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = greeting,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Default,
-                    color = TextPrimary,
-                    lineHeight = 30.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = vibeSubtitle,
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Normal
-                )
+            // Section 1: Dynamic Gen-Z Welcome Header + Liquid Glass Settings Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = greeting,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Default,
+                        color = TextPrimary,
+                        lineHeight = 30.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = vibeSubtitle,
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Liquid Glass Settings Pill
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(LiquidGlassFillBrush, CircleShape)
+                        .border(LiquidGlassPillBorder, CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onOpenSettings
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_apple_sliders),
+                        contentDescription = "Settings",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    if (isUpdateAvailable) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .align(Alignment.TopEnd)
+                                .padding(top = 2.dp, end = 2.dp)
+                                .clip(CircleShape)
+                                .background(AccentBlue)
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Liquid Glass Settings Pill
+            // Section 2: Hero Liquid Glass Search Capsule
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .fillMaxWidth()
+                    .height(50.dp)
                     .clip(CircleShape)
                     .background(LiquidGlassFillBrush, CircleShape)
                     .border(LiquidGlassPillBorder, CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onOpenSettings
-                    ),
-                contentAlignment = Alignment.Center
+                        onClick = onOpenSearch
+                    )
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_apple_sliders),
-                    contentDescription = "Settings",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-
-                if (isUpdateAvailable) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .align(Alignment.TopEnd)
-                            .padding(top = 2.dp, end = 2.dp)
-                            .clip(CircleShape)
-                            .background(AccentBlue)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_apple_search),
+                        contentDescription = "Search",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Search or enter address...",
+                        fontSize = 14.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1
                     )
                 }
             }
-        }
 
-        // Section 2: Hero Liquid Glass Search Capsule
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(CircleShape)
-                .background(LiquidGlassFillBrush, CircleShape)
-                .border(LiquidGlassPillBorder, CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onOpenSearch
-                )
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_apple_search),
-                    contentDescription = "Search",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Search the void or enter URL...",
-                    fontSize = 14.sp,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Normal,
-                    maxLines = 1
-                )
-            }
-        }
+            Spacer(modifier = Modifier.height(28.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Section 3: Favorites Section Title
-        Text(
-            text = "Favorites",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        // Section 4: 4-Column Pure Liquid Glass App Icons Grid
-        rows.forEach { rowItems ->
+            // Section 3: Favorites Section Title
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 22.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                for (i in 0 until 4) {
-                    val bookmark = rowItems.getOrNull(i)
-                    if (bookmark != null) {
-                        FavoriteTile(
-                            bookmark = bookmark,
-                            onClick = { onSelectBookmark(bookmark.url) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "Favorites",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+
+                Text(
+                    text = "+ Add",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AccentBlue,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(onClick = onOpenSettings)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+
+            // Section 4: 4-Column Pure Liquid Glass App Icons Grid
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    for (i in 0 until 4) {
+                        val bookmark = rowItems.getOrNull(i)
+                        if (bookmark != null) {
+                            FavoriteTile(
+                                bookmark = bookmark,
+                                onClick = { onSelectBookmark(bookmark.url) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -279,6 +300,7 @@ private fun FavoriteTile(
         cleanUrl.contains("ycombinator") || cleanTitle.contains("hacker") -> R.drawable.ic_brand_hackernews
         cleanUrl.contains("reddit") || cleanTitle.contains("reddit") -> R.drawable.ic_brand_reddit
         cleanUrl.contains("google") || cleanTitle.contains("google") -> R.drawable.ic_brand_google
+        cleanUrl.contains("x.com") || cleanUrl.contains("twitter") || cleanTitle.contains("twitter") || cleanTitle == "x" -> R.drawable.ic_brand_x
         else -> null
     }
 
@@ -293,7 +315,7 @@ private fun FavoriteTile(
         // Individual Liquid Glass Container with Specular Glass Border
         Box(
             modifier = Modifier
-                .size(62.dp)
+                .size(58.dp)
                 .clip(TileShape)
                 .background(LiquidGlassFillBrush, TileShape)
                 .border(LiquidGlassPillBorder, TileShape),
@@ -303,7 +325,7 @@ private fun FavoriteTile(
                 Icon(
                     painter = painterResource(brandDrawableId),
                     contentDescription = bookmark.title,
-                    tint = Color.White,
+                    tint = Color.White.copy(alpha = 0.95f),
                     modifier = Modifier.size(28.dp)
                 )
             } else {
@@ -311,18 +333,18 @@ private fun FavoriteTile(
                 Text(
                     text = monogram,
                     color = TextPrimary,
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = bookmark.title,
-            color = TextPrimary,
-            fontSize = 12.sp,
+            color = TextSecondary,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -356,7 +378,7 @@ fun SettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF14161C),
+        containerColor = Color(0xFF14161F),
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -392,7 +414,7 @@ fun SettingsSheet(
                     text = "Done",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = AccentBlue,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onDismiss)
@@ -429,7 +451,7 @@ fun SettingsSheet(
                                 if (isSelected) {
                                     Modifier
                                         .background(Color(0x38FFFFFF), CircleShape)
-                                        .border(1.dp, Color(0x38FFFFFF), CircleShape)
+                                        .border(0.5.dp, Color(0x40FFFFFF), CircleShape)
                                 } else {
                                     Modifier
                                 }
