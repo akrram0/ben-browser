@@ -62,8 +62,7 @@ dependencies {
     // Standalone Mozilla GeckoView Engine (WebRender GPU + Multi-Process + TextureView)
     implementation("org.mozilla.geckoview:geckoview-arm64-v8a:157.0.20261005135250")
 
-    // Haze 2.0.1 for Liquid Glass refraction & blur
-    implementation("dev.chrisbanes.haze:haze:2.0.1")
-    implementation("dev.chrisbanes.haze:haze-blur:2.0.1")
-    implementation("dev.chrisbanes.haze:haze-glass:2.0.1")
+    // AndroidLiquidGlass (Kyant0 Backdrop & Shapes)
+    implementation("io.github.kyant0:backdrop:2.0.1")
+    implementation("io.github.kyant0:shapes:1.2.1")
 }

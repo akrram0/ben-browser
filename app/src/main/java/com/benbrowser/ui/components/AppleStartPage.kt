@@ -63,6 +63,16 @@ import com.benbrowser.theme.AccentBlue
 import com.benbrowser.theme.BgCanvas
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import java.util.Calendar
 
 private val LiquidGlassPillBorder = BorderStroke(
@@ -103,6 +113,7 @@ fun AppleStartPage(
     onSelectBookmark: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) {
     // Append a dedicated "+ Add" item at the end of the bookmarks list
@@ -165,13 +176,23 @@ fun AppleStartPage(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // Liquid Glass Settings Pill
+                // Liquid Glass Settings Pill powered by AndroidLiquidGlass
                 Box(
                     modifier = Modifier
                         .size(42.dp)
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { Capsule() },
+                            effects = {
+                                vibrancy()
+                                blur(8f.dp.toPx())
+                                lens(10f.dp.toPx(), 14f.dp.toPx())
+                            },
+                            highlight = { Highlight(width = 1.dp, alpha = 0.7f) },
+                            shadow = { Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.3f)) },
+                            onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                        )
                         .clip(CircleShape)
-                        .background(LiquidGlassFillBrush, CircleShape)
-                        .border(LiquidGlassPillBorder, CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -199,14 +220,24 @@ fun AppleStartPage(
                 }
             }
 
-            // Section 2: Hero Liquid Glass Search Capsule
+            // Section 2: Hero Liquid Glass Search Capsule powered by AndroidLiquidGlass
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { Capsule() },
+                        effects = {
+                            vibrancy()
+                            blur(10f.dp.toPx())
+                            lens(12f.dp.toPx(), 18f.dp.toPx())
+                        },
+                        highlight = { Highlight(width = 1.dp, alpha = 0.75f) },
+                        shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = 0.35f)) },
+                        onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                    )
                     .clip(CircleShape)
-                    .background(LiquidGlassFillBrush, CircleShape)
-                    .border(LiquidGlassPillBorder, CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -267,12 +298,14 @@ fun AppleStartPage(
                         if (item != null) {
                             if (item.id == "fav_add_custom") {
                                 AddTile(
+                                    backdrop = backdrop,
                                     onClick = onOpenSettings,
                                     modifier = Modifier.weight(1f)
                                 )
                             } else {
                                 FavoriteTile(
                                     bookmark = item,
+                                    backdrop = backdrop,
                                     onClick = { onSelectBookmark(item.url) },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -290,6 +323,7 @@ fun AppleStartPage(
 @Composable
 private fun FavoriteTile(
     bookmark: Bookmark,
+    backdrop: Backdrop,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -331,13 +365,23 @@ private fun FavoriteTile(
                 onClick = onClick
             )
     ) {
-        // Individual Liquid Glass Container with Specular Glass Border
+        // Individual Liquid Glass Container powered by AndroidLiquidGlass
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .clip(TileShape)
-                .background(LiquidGlassFillBrush, TileShape)
-                .border(LiquidGlassPillBorder, TileShape),
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedRectangle(18f.dp) },
+                    effects = {
+                        vibrancy()
+                        blur(8f.dp.toPx())
+                        lens(12f.dp.toPx(), 16f.dp.toPx(), depthEffect = true)
+                    },
+                    highlight = { Highlight(width = 1.dp, alpha = 0.75f) },
+                    shadow = { Shadow(radius = 14.dp, color = Color.Black.copy(alpha = 0.35f)) },
+                    onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                )
+                .clip(TileShape),
             contentAlignment = Alignment.Center
         ) {
             if (brandDrawableId != null) {
@@ -375,6 +419,7 @@ private fun FavoriteTile(
 
 @Composable
 private fun AddTile(
+    backdrop: Backdrop,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -402,9 +447,18 @@ private fun AddTile(
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .clip(TileShape)
-                .background(Color(0x18FFFFFF), TileShape)
-                .border(BorderStroke(1.dp, Color(0x28FFFFFF)), TileShape),
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedRectangle(18f.dp) },
+                    effects = {
+                        vibrancy()
+                        blur(8f.dp.toPx())
+                        lens(12f.dp.toPx(), 16f.dp.toPx())
+                    },
+                    highlight = { Highlight(width = 1.dp, alpha = 0.5f) },
+                    onDrawSurface = { drawRect(Color(0x18FFFFFF)) }
+                )
+                .clip(TileShape),
             contentAlignment = Alignment.Center
         ) {
             Text(

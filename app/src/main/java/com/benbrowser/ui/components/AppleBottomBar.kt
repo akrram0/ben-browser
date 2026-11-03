@@ -80,6 +80,15 @@ import com.benbrowser.theme.DisabledTint
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.benbrowser.ui.BrowserState
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 import kotlin.math.abs
 
 private val BitChordDpSpring = spring<Dp>(dampingRatio = 0.72f, stiffness = 320f)
@@ -131,6 +140,7 @@ fun AppleBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
+    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -215,9 +225,31 @@ fun AppleBottomBar(
                     scaleX = morphScaleX
                     scaleY = morphScaleY
                 }
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { Capsule() },
+                    effects = {
+                        vibrancy()
+                        blur(12f.dp.toPx())
+                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
+                    },
+                    highlight = {
+                        Highlight(
+                            width = 1.dp,
+                            alpha = 0.85f
+                        )
+                    },
+                    shadow = {
+                        Shadow(
+                            radius = 20.dp,
+                            color = Color.Black.copy(alpha = 0.45f)
+                        )
+                    },
+                    onDrawSurface = {
+                        drawRect(LiquidGlassFillBrush)
+                    }
+                )
                 .clip(PillShape)
-                .background(LiquidGlassFillBrush, PillShape)
-                .border(LiquidGlassSpecularBorder, PillShape)
                 .padding(horizontal = if (mode == BarMode.Collapsed) 8.dp else 4.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -400,15 +432,31 @@ fun AppleBottomBar(
                                 }
                             }
 
-                            // Center: Liquid Glass URL Capsule
+                            // Center: Liquid Glass URL Capsule powered by AndroidLiquidGlass
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(36.dp)
                                     .padding(horizontal = 4.dp)
+                                    .drawBackdrop(
+                                        backdrop = backdrop,
+                                        shape = { Capsule() },
+                                        effects = {
+                                            vibrancy()
+                                            blur(6f.dp.toPx())
+                                            lens(8f.dp.toPx(), 12f.dp.toPx())
+                                        },
+                                        highlight = {
+                                            Highlight(
+                                                width = 0.5.dp,
+                                                alpha = 0.6f
+                                            )
+                                        },
+                                        onDrawSurface = {
+                                            drawRect(Color(0x22FFFFFF))
+                                        }
+                                    )
                                     .clip(PillShape)
-                                    .background(Color(0x22FFFFFF), PillShape)
-                                    .border(BorderStroke(0.5.dp, Color(0x35FFFFFF)), PillShape)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,

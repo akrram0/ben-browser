@@ -34,6 +34,8 @@ import com.benbrowser.ui.components.AppleBottomBar
 import com.benbrowser.ui.components.AppleStartPage
 import com.benbrowser.ui.components.BookmarksSheet
 import com.benbrowser.ui.components.SettingsSheet
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
@@ -76,6 +78,7 @@ fun BrowserScreen(
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
 
     val geckoSession = remember { GeckoSession() }
+    val backdrop = rememberLayerBackdrop()
 
     // Pre-warm GeckoRuntime 100ms after first frame so cold start opens instantly
     LaunchedEffect(Unit) {
@@ -236,71 +239,80 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        if (isEngineReady) {
-            AndroidView(
-                factory = { ctx ->
-                    val runtime = GeckoEngine.getRuntime(ctx)
-                    if (!geckoSession.isOpen) {
-                        geckoSession.open(runtime)
-                    }
-                    GeckoView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
-                        setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                        // Keep View.VISIBLE so SurfaceTexture is never destroyed
-                        visibility = View.VISIBLE
-                        alpha = if (state.isStartPage) 0f else 1f
-
-                        ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
-                            if (v.hasFocus()) {
-                                ViewCompat.onApplyWindowInsets(v, insets)
-                            } else {
-                                WindowInsetsCompat.CONSUMED
-                            }
-                        }
-
-                        setSession(geckoSession)
-                        geckoViewInstance = this
-                    }
-                },
-                update = { view ->
-                    geckoViewInstance = view
-                    view.alpha = if (state.isStartPage) 0f else 1f
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Start Page Overlay: 120 FPS native scroll performance
-        AnimatedVisibility(
-            visible = state.isStartPage,
-            enter = fadeIn(tween(140, easing = FastOutSlowInEasing)),
-            exit = fadeOut(tween(110, easing = FastOutSlowInEasing)),
-            modifier = Modifier.fillMaxSize()
+        // Content captured by AndroidLiquidGlass
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdrop)
         ) {
-            AppleStartPage(
-                bookmarks = state.bookmarks,
-                searchEngine = state.searchEngine,
-                isUpdateAvailable = updateInfo.isAvailable,
-                onSelectBookmark = { url ->
-                    viewModel.loadUrl(url)
-                },
-                onOpenSearch = {
-                    viewModel.setEditingUrl(true)
-                },
-                onOpenSettings = {
-                    viewModel.setShowSettingsSheet(true)
-                },
+            if (isEngineReady) {
+                AndroidView(
+                    factory = { ctx ->
+                        val runtime = GeckoEngine.getRuntime(ctx)
+                        if (!geckoSession.isOpen) {
+                            geckoSession.open(runtime)
+                        }
+                        GeckoView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                            setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                            // Keep View.VISIBLE so SurfaceTexture is never destroyed
+                            visibility = View.VISIBLE
+                            alpha = if (state.isStartPage) 0f else 1f
+
+                            ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                                if (v.hasFocus()) {
+                                    ViewCompat.onApplyWindowInsets(v, insets)
+                                } else {
+                                    WindowInsetsCompat.CONSUMED
+                                }
+                            }
+
+                            setSession(geckoSession)
+                            geckoViewInstance = this
+                        }
+                    },
+                    update = { view ->
+                        geckoViewInstance = view
+                        view.alpha = if (state.isStartPage) 0f else 1f
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Start Page Overlay: 120 FPS native scroll performance
+            AnimatedVisibility(
+                visible = state.isStartPage,
+                enter = fadeIn(tween(140, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(110, easing = FastOutSlowInEasing)),
                 modifier = Modifier.fillMaxSize()
-            )
+            ) {
+                AppleStartPage(
+                    bookmarks = state.bookmarks,
+                    searchEngine = state.searchEngine,
+                    isUpdateAvailable = updateInfo.isAvailable,
+                    backdrop = backdrop,
+                    onSelectBookmark = { url ->
+                        viewModel.loadUrl(url)
+                    },
+                    onOpenSearch = {
+                        viewModel.setEditingUrl(true)
+                    },
+                    onOpenSettings = {
+                        viewModel.setShowSettingsSheet(true)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
-        // Floating iOS 26 Safari / BitChord Liquid Glass Bottom Bar
+        // Floating iOS 26 Safari / BitChord Liquid Glass Bottom Bar powered by AndroidLiquidGlass
         AppleBottomBar(
             state = state,
+            backdrop = backdrop,
             onBack = {
                 if (state.canGoBack && !state.isStartPage) {
                     geckoViewInstance?.alpha = 1f
