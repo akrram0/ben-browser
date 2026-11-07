@@ -1,6 +1,5 @@
 package com.benbrowser.ui.components
 
-import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -10,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -98,7 +96,6 @@ private const val SQUASH = 0.45f
 val FLOATING_BAR_MAX_WIDTH = 440.dp
 private val PillShape = RoundedCornerShape(percent = 50)
 
-// Liquid Glass: translucent refraction fill with specular highlight border
 private val LiquidGlassFillBrush = Brush.verticalGradient(
     colors = listOf(
         Color(0x99181B26),
@@ -130,7 +127,7 @@ fun BenBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop? = null,
+    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -183,7 +180,6 @@ fun BenBottomBar(
         else -> 52.dp
     }
 
-    // High-performance spring physics for bar morph
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
         animationSpec = BenDpSpring,
@@ -210,45 +206,34 @@ fun BenBottomBar(
             modifier = Modifier
                 .width(animatedWidth)
                 .height(animatedHeight)
-                // GPU-accelerated layer transform: zero recompositions during physics squash & stretch
                 .graphicsLayer {
                     val travel = abs(targetWidth.toPx() - animatedWidth.toPx())
                     val l = (travel / 140.dp.toPx()).coerceIn(0f, 1f)
                     scaleX = 1f + l * (STRETCH * 0.35f)
                     scaleY = 1f - l * (STRETCH * SQUASH * 0.35f)
                 }
-                .then(
-                    if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        try {
-                            Modifier.drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { Capsule() },
-                                effects = {
-                                    vibrancy()
-                                    blur(12f.dp.toPx())
-                                    lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
-                                },
-                                highlight = {
-                                    Highlight(
-                                        width = 1.dp,
-                                        alpha = 0.85f
-                                    )
-                                },
-                                shadow = {
-                                    Shadow(
-                                        radius = 20.dp,
-                                        color = Color.Black.copy(alpha = 0.5f)
-                                    )
-                                },
-                                onDrawSurface = {
-                                    drawRect(LiquidGlassFillBrush)
-                                }
-                            )
-                        } catch (_: Throwable) {
-                            Modifier.background(LiquidGlassFillBrush, PillShape)
-                        }
-                    } else {
-                        Modifier.background(LiquidGlassFillBrush, PillShape)
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { Capsule() },
+                    effects = {
+                        vibrancy()
+                        blur(12f.dp.toPx())
+                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
+                    },
+                    highlight = {
+                        Highlight(
+                            width = 1.dp,
+                            alpha = 0.85f
+                        )
+                    },
+                    shadow = {
+                        Shadow(
+                            radius = 20.dp,
+                            color = Color.Black.copy(alpha = 0.5f)
+                        )
+                    },
+                    onDrawSurface = {
+                        drawRect(LiquidGlassFillBrush)
                     }
                 )
                 .clip(PillShape)
@@ -265,7 +250,6 @@ fun BenBottomBar(
             ) { targetMode ->
                 when (targetMode) {
                     BarMode.Collapsed -> {
-                        // Collapsed Pill: Minimalist domain view, tap anywhere to restore
                         val collapsedSource = remember { MutableInteractionSource() }
                         Row(
                             modifier = Modifier
@@ -299,7 +283,6 @@ fun BenBottomBar(
                     }
 
                     BarMode.Editing -> {
-                        // Editing Mode: Focused URL search input
                         LaunchedEffect(Unit) {
                             val initialText = if (state.isStartPage) "" else state.currentUrl
                             textFieldValue = TextFieldValue(
@@ -389,7 +372,6 @@ fun BenBottomBar(
                     }
 
                     BarMode.Expanded -> {
-                        // Normal Expanded Dock: 5 controls with 45% touch target ratio
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -397,7 +379,6 @@ fun BenBottomBar(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Left: Back & Forward
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -435,39 +416,28 @@ fun BenBottomBar(
                                 }
                             }
 
-                            // Center: Liquid Glass URL Capsule
                             val capsuleSource = remember { MutableInteractionSource() }
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(36.dp)
                                     .padding(horizontal = 4.dp)
-                                    .then(
-                                        if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            try {
-                                                Modifier.drawBackdrop(
-                                                    backdrop = backdrop,
-                                                    shape = { Capsule() },
-                                                    effects = {
-                                                        vibrancy()
-                                                        blur(6f.dp.toPx())
-                                                        lens(8f.dp.toPx(), 12f.dp.toPx())
-                                                    },
-                                                    highlight = {
-                                                        Highlight(
-                                                            width = 0.5.dp,
-                                                            alpha = 0.6f
-                                                        )
-                                                    },
-                                                    onDrawSurface = {
-                                                        drawRect(Color(0x22FFFFFF))
-                                                    }
-                                                )
-                                            } catch (_: Throwable) {
-                                                Modifier.background(Color(0x22FFFFFF), PillShape)
-                                            }
-                                        } else {
-                                            Modifier.background(Color(0x22FFFFFF), PillShape)
+                                    .drawBackdrop(
+                                        backdrop = backdrop,
+                                        shape = { Capsule() },
+                                        effects = {
+                                            vibrancy()
+                                            blur(6f.dp.toPx())
+                                            lens(8f.dp.toPx(), 12f.dp.toPx())
+                                        },
+                                        highlight = {
+                                            Highlight(
+                                                width = 0.5.dp,
+                                                alpha = 0.6f
+                                            )
+                                        },
+                                        onDrawSurface = {
+                                            drawRect(Color(0x22FFFFFF))
                                         }
                                     )
                                     .clip(PillShape)
@@ -563,7 +533,6 @@ fun BenBottomBar(
                                 }
                             }
 
-                            // Right: Bookmarks & Home (Start Page)
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -611,7 +580,6 @@ fun BenBottomBar(
     }
 }
 
-// Backward compatibility alias
 @Composable
 fun AppleBottomBar(
     state: BrowserState,
@@ -623,7 +591,7 @@ fun AppleBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop? = null,
+    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) = BenBottomBar(
     state = state,

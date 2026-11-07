@@ -1,7 +1,6 @@
 package com.benbrowser
 
 import android.content.Context
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -35,7 +34,6 @@ import com.benbrowser.ui.components.BenBottomBar
 import com.benbrowser.ui.components.BookmarksSheet
 import com.benbrowser.ui.components.SettingsSheet
 import com.benbrowser.ui.components.StartPage
-import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.mozilla.geckoview.GeckoResult
@@ -80,17 +78,7 @@ fun BrowserScreen(
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
 
     val geckoSession = remember { GeckoSession() }
-
-    // Crash-Proof Glass Pipeline: Kyant0 Backdrop requires Android 13+ (RuntimeShader API 33)
-    val backdrop: Backdrop? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        try {
-            rememberLayerBackdrop()
-        } catch (_: Throwable) {
-            null
-        }
-    } else {
-        null
-    }
+    val backdrop = rememberLayerBackdrop()
 
     // Pre-warm GeckoRuntime 100ms after first frame
     LaunchedEffect(Unit) {
@@ -264,16 +252,6 @@ fun BrowserScreen(
         }
     }
 
-    val layerBackdropModifier = if (backdrop != null) {
-        try {
-            Modifier.layerBackdrop(backdrop)
-        } catch (_: Throwable) {
-            Modifier
-        }
-    } else {
-        Modifier
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -282,7 +260,7 @@ fun BrowserScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(layerBackdropModifier)
+                .layerBackdrop(backdrop)
         ) {
             if (isEngineReady) {
                 AndroidView(

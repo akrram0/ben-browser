@@ -16,6 +16,10 @@ android {
 
         val buildEpoch = System.currentTimeMillis()
         buildConfigField("long", "BUILD_TIME", "${buildEpoch}L")
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {
