@@ -1,6 +1,7 @@
 package com.benbrowser
 
 import android.content.Context
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -34,6 +35,7 @@ import com.benbrowser.ui.components.BenBottomBar
 import com.benbrowser.ui.components.BookmarksSheet
 import com.benbrowser.ui.components.SettingsSheet
 import com.benbrowser.ui.components.StartPage
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.mozilla.geckoview.GeckoResult
@@ -78,123 +80,143 @@ fun BrowserScreen(
     var isEngineReady by remember { mutableStateOf(GeckoEngine.isInitialized()) }
 
     val geckoSession = remember { GeckoSession() }
-    val backdrop = rememberLayerBackdrop()
 
-    // Pre-warm GeckoRuntime 100ms after first frame so cold start opens instantly
+    // Crash-Proof Glass Pipeline: Kyant0 Backdrop requires Android 13+ (RuntimeShader API 33)
+    val backdrop: Backdrop? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        try {
+            rememberLayerBackdrop()
+        } catch (_: Throwable) {
+            null
+        }
+    } else {
+        null
+    }
+
+    // Pre-warm GeckoRuntime 100ms after first frame
     LaunchedEffect(Unit) {
-        if (!isEngineReady) {
-            kotlinx.coroutines.delay(100)
-        }
-        val runtime = GeckoEngine.getRuntime(context)
-        if (!geckoSession.isOpen) {
-            geckoSession.open(runtime)
-        }
-        isEngineReady = true
+        try {
+            if (!isEngineReady) {
+                kotlinx.coroutines.delay(100)
+            }
+            val runtime = GeckoEngine.getRuntime(context)
+            if (!geckoSession.isOpen) {
+                geckoSession.open(runtime)
+            }
+            isEngineReady = true
+        } catch (_: Throwable) {}
     }
 
     DisposableEffect(geckoSession) {
-        geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(
-                session: GeckoSession,
-                url: String?,
-                perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
-                hasUserGesture: Boolean
-            ) {
-                viewModel.onLocationChanged(url)
-            }
-
-            override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
-                viewModel.setCanGoBack(canGoBack)
-            }
-
-            override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
-                viewModel.setCanGoForward(canGoForward)
-            }
-
-            override fun onNewSession(
-                session: GeckoSession,
-                uri: String
-            ): GeckoResult<GeckoSession>? {
-                session.loadUri(uri)
-                return null
-            }
-        }
-
-        geckoSession.progressDelegate = object : GeckoSession.ProgressDelegate {
-            override fun onPageStart(session: GeckoSession, url: String) {
-                viewModel.onPageStarted(url)
-            }
-
-            override fun onProgressChange(session: GeckoSession, progress: Int) {
-                viewModel.onProgressChanged(progress)
-            }
-
-            override fun onPageStop(session: GeckoSession, success: Boolean) {
-                viewModel.onPageStop()
-            }
-        }
-
-        geckoSession.contentDelegate = object : GeckoSession.ContentDelegate {
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                viewModel.onReceivedTitle(title)
-            }
-
-            override fun onFirstContentfulPaint(session: GeckoSession) {
-                geckoViewInstance?.alpha = 1f
-            }
-
-            override fun onFirstComposite(session: GeckoSession) {
-                geckoViewInstance?.alpha = 1f
-            }
-
-            override fun onCrash(session: GeckoSession) {
-                session.open(GeckoEngine.getRuntime(context))
-                session.reload()
-            }
-
-            override fun onKill(session: GeckoSession) {
-                session.open(GeckoEngine.getRuntime(context))
-                session.reload()
-            }
-        }
-
-        var lastScrollY = 0
-        var scrollAccum = 0
-        var latchedMinimized = false
-
-        geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
-            override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
-                val dy = scrollY - lastScrollY
-                lastScrollY = scrollY
-
-                if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
-                    scrollAccum = 0
+        try {
+            geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
+                override fun onLocationChange(
+                    session: GeckoSession,
+                    url: String?,
+                    perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
+                    hasUserGesture: Boolean
+                ) {
+                    viewModel.onLocationChanged(url)
                 }
-                scrollAccum += dy
 
-                if (scrollY < 60) {
-                    scrollAccum = 0
-                    if (latchedMinimized) {
+                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                    viewModel.setCanGoBack(canGoBack)
+                }
+
+                override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
+                    viewModel.setCanGoForward(canGoForward)
+                }
+
+                override fun onNewSession(
+                    session: GeckoSession,
+                    uri: String
+                ): GeckoResult<GeckoSession>? {
+                    session.loadUri(uri)
+                    return null
+                }
+            }
+
+            geckoSession.progressDelegate = object : GeckoSession.ProgressDelegate {
+                override fun onPageStart(session: GeckoSession, url: String) {
+                    viewModel.onPageStarted(url)
+                }
+
+                override fun onProgressChange(session: GeckoSession, progress: Int) {
+                    viewModel.onProgressChanged(progress)
+                }
+
+                override fun onPageStop(session: GeckoSession, success: Boolean) {
+                    viewModel.onPageStop()
+                }
+            }
+
+            geckoSession.contentDelegate = object : GeckoSession.ContentDelegate {
+                override fun onTitleChange(session: GeckoSession, title: String?) {
+                    viewModel.onReceivedTitle(title)
+                }
+
+                override fun onFirstContentfulPaint(session: GeckoSession) {
+                    geckoViewInstance?.alpha = 1f
+                }
+
+                override fun onFirstComposite(session: GeckoSession) {
+                    geckoViewInstance?.alpha = 1f
+                }
+
+                override fun onCrash(session: GeckoSession) {
+                    try {
+                        session.open(GeckoEngine.getRuntime(context))
+                        session.reload()
+                    } catch (_: Throwable) {}
+                }
+
+                override fun onKill(session: GeckoSession) {
+                    try {
+                        session.open(GeckoEngine.getRuntime(context))
+                        session.reload()
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            var lastScrollY = 0
+            var scrollAccum = 0
+            var latchedMinimized = false
+
+            geckoSession.scrollDelegate = object : GeckoSession.ScrollDelegate {
+                override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
+                    val dy = scrollY - lastScrollY
+                    lastScrollY = scrollY
+
+                    if ((dy > 0 && scrollAccum < 0) || (dy < 0 && scrollAccum > 0)) {
+                        scrollAccum = 0
+                    }
+                    scrollAccum += dy
+
+                    if (scrollY < 60) {
+                        scrollAccum = 0
+                        if (latchedMinimized) {
+                            latchedMinimized = false
+                            viewModel.setBarMinimized(false)
+                        }
+                    } else if (scrollAccum > 120 && scrollY > 160 && !latchedMinimized) {
+                        latchedMinimized = true
+                        scrollAccum = 0
+                        viewModel.setBarMinimized(true)
+                    } else if (scrollAccum < -90 && latchedMinimized) {
                         latchedMinimized = false
+                        scrollAccum = 0
                         viewModel.setBarMinimized(false)
                     }
-                } else if (scrollAccum > 120 && scrollY > 160 && !latchedMinimized) {
-                    latchedMinimized = true
-                    scrollAccum = 0
-                    viewModel.setBarMinimized(true)
-                } else if (scrollAccum < -90 && latchedMinimized) {
-                    latchedMinimized = false
-                    scrollAccum = 0
-                    viewModel.setBarMinimized(false)
                 }
             }
-        }
+        } catch (_: Throwable) {}
 
         onDispose {
-            geckoSession.scrollDelegate = null
-            if (geckoSession.isOpen) {
-                geckoSession.close()
-            }
+            try {
+                geckoSession.scrollDelegate = null
+                if (geckoSession.isOpen) {
+                    geckoSession.close()
+                }
+            } catch (_: Throwable) {}
         }
     }
 
@@ -202,21 +224,23 @@ fun BrowserScreen(
     LaunchedEffect(state.pendingUrl, geckoViewInstance) {
         val targetUrl = state.pendingUrl
         if (!targetUrl.isNullOrBlank()) {
-            val runtime = GeckoEngine.getRuntime(context)
-            if (!geckoSession.isOpen) {
-                geckoSession.open(runtime)
-            }
-            isEngineReady = true
-            val view = geckoViewInstance
-            if (view != null) {
-                view.alpha = 1f
-                geckoSession.loadUri(targetUrl)
-                viewModel.onUrlLoadConsumed()
-            }
+            try {
+                val runtime = GeckoEngine.getRuntime(context)
+                if (!geckoSession.isOpen) {
+                    geckoSession.open(runtime)
+                }
+                isEngineReady = true
+                val view = geckoViewInstance
+                if (view != null) {
+                    view.alpha = 1f
+                    geckoSession.loadUri(targetUrl)
+                    viewModel.onUrlLoadConsumed()
+                }
+            } catch (_: Throwable) {}
         }
     }
 
-    // Toggle GeckoView alpha: stays warm in the hierarchy so TextureView is never destroyed
+    // Toggle GeckoView alpha
     LaunchedEffect(state.isStartPage) {
         geckoViewInstance?.let { view ->
             val targetAlpha = if (state.isStartPage) 0f else 1f
@@ -226,16 +250,28 @@ fun BrowserScreen(
         }
     }
 
-    // System Back Handler: edit mode -> Gecko history -> start page -> exit
+    // System Back Handler
     BackHandler(enabled = !state.isStartPage || state.canGoBack || state.isEditingUrl) {
         when {
             state.isEditingUrl -> viewModel.setEditingUrl(false)
             state.canGoBack && !state.isStartPage -> {
-                geckoViewInstance?.alpha = 1f
-                geckoSession.goBack()
+                try {
+                    geckoViewInstance?.alpha = 1f
+                    geckoSession.goBack()
+                } catch (_: Throwable) {}
             }
             else -> viewModel.openStartPage()
         }
+    }
+
+    val layerBackdropModifier = if (backdrop != null) {
+        try {
+            Modifier.layerBackdrop(backdrop)
+        } catch (_: Throwable) {
+            Modifier
+        }
+    } else {
+        Modifier
     }
 
     Box(
@@ -243,44 +279,46 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // Content captured by AndroidLiquidGlass
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .layerBackdrop(backdrop)
+                .then(layerBackdropModifier)
         ) {
             if (isEngineReady) {
                 AndroidView(
                     factory = { ctx ->
-                        val runtime = GeckoEngine.getRuntime(ctx)
-                        if (!geckoSession.isOpen) {
-                            geckoSession.open(runtime)
-                        }
-                        GeckoView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
-                            setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                            // Keep View.VISIBLE so SurfaceTexture is never destroyed
-                            visibility = View.VISIBLE
-                            alpha = if (state.isStartPage) 0f else 1f
-
-                            ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
-                                if (v.hasFocus()) {
-                                    ViewCompat.onApplyWindowInsets(v, insets)
-                                } else {
-                                    WindowInsetsCompat.CONSUMED
-                                }
+                        try {
+                            val runtime = GeckoEngine.getRuntime(ctx)
+                            if (!geckoSession.isOpen) {
+                                geckoSession.open(runtime)
                             }
+                            GeckoView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                                setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
+                                visibility = View.VISIBLE
+                                alpha = if (state.isStartPage) 0f else 1f
 
-                            setSession(geckoSession)
-                            geckoViewInstance = this
+                                ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                                    if (v.hasFocus()) {
+                                        ViewCompat.onApplyWindowInsets(v, insets)
+                                    } else {
+                                        WindowInsetsCompat.CONSUMED
+                                    }
+                                }
+
+                                setSession(geckoSession)
+                                geckoViewInstance = this
+                            }
+                        } catch (_: Throwable) {
+                            View(ctx)
                         }
                     },
                     update = { view ->
-                        if (geckoViewInstance != view) {
+                        if (geckoViewInstance != view && view is GeckoView) {
                             geckoViewInstance = view
                         }
                         val targetAlpha = if (state.isStartPage) 0f else 1f
@@ -292,7 +330,6 @@ fun BrowserScreen(
                 )
             }
 
-            // Start Page Overlay: 120 FPS native scroll performance
             AnimatedVisibility(
                 visible = state.isStartPage,
                 enter = fadeIn(tween(140, easing = FastOutSlowInEasing)),
@@ -318,26 +355,31 @@ fun BrowserScreen(
             }
         }
 
-        // Floating Ben Browser Liquid Glass Bottom Bar
         BenBottomBar(
             state = state,
             backdrop = backdrop,
             onBack = {
                 if (state.canGoBack && !state.isStartPage) {
-                    geckoViewInstance?.alpha = 1f
-                    geckoSession.goBack()
+                    try {
+                        geckoViewInstance?.alpha = 1f
+                        geckoSession.goBack()
+                    } catch (_: Throwable) {}
                 } else {
                     viewModel.openStartPage()
                 }
             },
             onForward = {
                 if (state.canGoForward) {
-                    geckoViewInstance?.alpha = 1f
-                    geckoSession.goForward()
+                    try {
+                        geckoViewInstance?.alpha = 1f
+                        geckoSession.goForward()
+                    } catch (_: Throwable) {}
                 }
             },
             onReload = {
-                geckoSession.reload()
+                try {
+                    geckoSession.reload()
+                } catch (_: Throwable) {}
             },
             onSubmitUrl = { input ->
                 viewModel.loadUrl(input)
@@ -358,7 +400,6 @@ fun BrowserScreen(
         )
     }
 
-    // Bookmarks & Favorites Modal Sheet
     if (state.showBookmarksSheet) {
         BookmarksSheet(
             bookmarks = state.bookmarks,
@@ -382,7 +423,6 @@ fun BrowserScreen(
         )
     }
 
-    // Settings Modal Sheet
     if (state.showSettingsSheet) {
         SettingsSheet(
             searchEngine = state.searchEngine,

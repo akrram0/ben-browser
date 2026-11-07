@@ -1,5 +1,6 @@
 package com.benbrowser.ui.components
 
+import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -129,7 +130,7 @@ fun BenBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
+    backdrop: Backdrop? = null,
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -216,28 +217,38 @@ fun BenBottomBar(
                     scaleX = 1f + l * (STRETCH * 0.35f)
                     scaleY = 1f - l * (STRETCH * SQUASH * 0.35f)
                 }
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { Capsule() },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
-                    },
-                    highlight = {
-                        Highlight(
-                            width = 1.dp,
-                            alpha = 0.85f
-                        )
-                    },
-                    shadow = {
-                        Shadow(
-                            radius = 20.dp,
-                            color = Color.Black.copy(alpha = 0.5f)
-                        )
-                    },
-                    onDrawSurface = {
-                        drawRect(LiquidGlassFillBrush)
+                .then(
+                    if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        try {
+                            Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { Capsule() },
+                                effects = {
+                                    vibrancy()
+                                    blur(12f.dp.toPx())
+                                    lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
+                                },
+                                highlight = {
+                                    Highlight(
+                                        width = 1.dp,
+                                        alpha = 0.85f
+                                    )
+                                },
+                                shadow = {
+                                    Shadow(
+                                        radius = 20.dp,
+                                        color = Color.Black.copy(alpha = 0.5f)
+                                    )
+                                },
+                                onDrawSurface = {
+                                    drawRect(LiquidGlassFillBrush)
+                                }
+                            )
+                        } catch (_: Throwable) {
+                            Modifier.background(LiquidGlassFillBrush, PillShape)
+                        }
+                    } else {
+                        Modifier.background(LiquidGlassFillBrush, PillShape)
                     }
                 )
                 .clip(PillShape)
@@ -431,22 +442,32 @@ fun BenBottomBar(
                                     .weight(1f)
                                     .height(36.dp)
                                     .padding(horizontal = 4.dp)
-                                    .drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { Capsule() },
-                                        effects = {
-                                            vibrancy()
-                                            blur(6f.dp.toPx())
-                                            lens(8f.dp.toPx(), 12f.dp.toPx())
-                                        },
-                                        highlight = {
-                                            Highlight(
-                                                width = 0.5.dp,
-                                                alpha = 0.6f
-                                            )
-                                        },
-                                        onDrawSurface = {
-                                            drawRect(Color(0x22FFFFFF))
+                                    .then(
+                                        if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            try {
+                                                Modifier.drawBackdrop(
+                                                    backdrop = backdrop,
+                                                    shape = { Capsule() },
+                                                    effects = {
+                                                        vibrancy()
+                                                        blur(6f.dp.toPx())
+                                                        lens(8f.dp.toPx(), 12f.dp.toPx())
+                                                    },
+                                                    highlight = {
+                                                        Highlight(
+                                                            width = 0.5.dp,
+                                                            alpha = 0.6f
+                                                        )
+                                                    },
+                                                    onDrawSurface = {
+                                                        drawRect(Color(0x22FFFFFF))
+                                                    }
+                                                )
+                                            } catch (_: Throwable) {
+                                                Modifier.background(Color(0x22FFFFFF), PillShape)
+                                            }
+                                        } else {
+                                            Modifier.background(Color(0x22FFFFFF), PillShape)
                                         }
                                     )
                                     .clip(PillShape)
@@ -602,7 +623,7 @@ fun AppleBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
+    backdrop: Backdrop? = null,
     modifier: Modifier = Modifier
 ) = BenBottomBar(
     state = state,

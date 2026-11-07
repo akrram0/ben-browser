@@ -1,5 +1,6 @@
 package com.benbrowser.ui.components
 
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.benbrowser.R
@@ -66,7 +69,6 @@ import com.benbrowser.theme.CardSurface
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -96,6 +98,43 @@ private val LiquidGlassFillBrush = Brush.verticalGradient(
 
 private val TileShape = RoundedCornerShape(18.dp)
 
+private fun Modifier.safeGlass(
+    backdrop: Backdrop?,
+    shape: Shape,
+    backdropShape: () -> com.kyant.shapes.Shape,
+    blurRadius: Dp = 8.dp,
+    lensNear: Dp = 10.dp,
+    lensFar: Dp = 14.dp,
+    highlightAlpha: Float = 0.75f,
+    shadowColor: Color = Color.Black.copy(alpha = 0.35f),
+    fillBrush: Brush = LiquidGlassFillBrush
+): Modifier {
+    return if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        try {
+            this.drawBackdrop(
+                backdrop = backdrop,
+                shape = backdropShape,
+                effects = {
+                    vibrancy()
+                    blur(blurRadius.toPx())
+                    lens(lensNear.toPx(), lensFar.toPx())
+                },
+                highlight = { Highlight(width = 1.dp, alpha = highlightAlpha) },
+                shadow = { Shadow(radius = 14.dp, color = shadowColor) },
+                onDrawSurface = { drawRect(fillBrush) }
+            )
+        } catch (_: Throwable) {
+            this
+                .background(fillBrush, shape)
+                .border(LiquidGlassPillBorder, shape)
+        }
+    } else {
+        this
+            .background(fillBrush, shape)
+            .border(LiquidGlassPillBorder, shape)
+    }
+}
+
 @Composable
 fun StartPage(
     bookmarks: List<Bookmark>,
@@ -104,10 +143,9 @@ fun StartPage(
     onSelectBookmark: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
+    backdrop: Backdrop? = null,
     modifier: Modifier = Modifier
 ) {
-    // Append a dedicated "+ Add" item at the end of the bookmarks list
     val allItems = remember(bookmarks) {
         bookmarks + Bookmark("fav_add_custom", "+ Add", "", 0L)
     }
@@ -154,17 +192,15 @@ fun StartPage(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .drawBackdrop(
+                            .safeGlass(
                                 backdrop = backdrop,
-                                shape = { RoundedRectangle(12f.dp) },
-                                effects = {
-                                    vibrancy()
-                                    blur(8f.dp.toPx())
-                                    lens(10f.dp.toPx(), 14f.dp.toPx())
-                                },
-                                highlight = { Highlight(width = 1.dp, alpha = 0.8f) },
-                                shadow = { Shadow(radius = 12.dp, color = AccentCyanGlow) },
-                                onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                                shape = RoundedCornerShape(12.dp),
+                                backdropShape = { RoundedRectangle(12f.dp) },
+                                blurRadius = 8.dp,
+                                lensNear = 10.dp,
+                                lensFar = 14.dp,
+                                highlightAlpha = 0.8f,
+                                shadowColor = AccentCyanGlow
                             )
                             .clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
@@ -194,22 +230,19 @@ fun StartPage(
                     }
                 }
 
-                // Settings Pill powered by Liquid Glass
                 val settingsSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .drawBackdrop(
+                        .safeGlass(
                             backdrop = backdrop,
-                            shape = { Capsule() },
-                            effects = {
-                                vibrancy()
-                                blur(8f.dp.toPx())
-                                lens(10f.dp.toPx(), 14f.dp.toPx())
-                            },
-                            highlight = { Highlight(width = 1.dp, alpha = 0.7f) },
-                            shadow = { Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.3f)) },
-                            onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                            shape = CircleShape,
+                            backdropShape = { Capsule() },
+                            blurRadius = 8.dp,
+                            lensNear = 10.dp,
+                            lensFar = 14.dp,
+                            highlightAlpha = 0.7f,
+                            shadowColor = Color.Black.copy(alpha = 0.3f)
                         )
                         .clip(CircleShape)
                         .clickable(
@@ -245,17 +278,15 @@ fun StartPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .drawBackdrop(
+                    .safeGlass(
                         backdrop = backdrop,
-                        shape = { Capsule() },
-                        effects = {
-                            vibrancy()
-                            blur(10f.dp.toPx())
-                            lens(12f.dp.toPx(), 18f.dp.toPx())
-                        },
-                        highlight = { Highlight(width = 1.dp, alpha = 0.75f) },
-                        shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = 0.35f)) },
-                        onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                        shape = CircleShape,
+                        backdropShape = { Capsule() },
+                        blurRadius = 10.dp,
+                        lensNear = 12.dp,
+                        lensFar = 18.dp,
+                        highlightAlpha = 0.75f,
+                        shadowColor = Color.Black.copy(alpha = 0.35f)
                     )
                     .clip(CircleShape)
                     .clickable(
@@ -320,7 +351,7 @@ fun StartPage(
                 }
             }
 
-            // Section 4: 4-Column Liquid Glass App Icons Grid
+            // Section 4: 4-Column App Icons Grid
             rows.forEach { rowItems ->
                 Row(
                     modifier = Modifier
@@ -358,7 +389,7 @@ fun StartPage(
 @Composable
 private fun FavoriteTile(
     bookmark: Bookmark,
-    backdrop: Backdrop,
+    backdrop: Backdrop?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -400,21 +431,18 @@ private fun FavoriteTile(
                 onClick = onClick
             )
     ) {
-        // Individual Liquid Glass Container
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .drawBackdrop(
+                .safeGlass(
                     backdrop = backdrop,
-                    shape = { RoundedRectangle(18f.dp) },
-                    effects = {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(12f.dp.toPx(), 16f.dp.toPx(), depthEffect = true)
-                    },
-                    highlight = { Highlight(width = 1.dp, alpha = 0.75f) },
-                    shadow = { Shadow(radius = 14.dp, color = Color.Black.copy(alpha = 0.35f)) },
-                    onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                    shape = TileShape,
+                    backdropShape = { RoundedRectangle(18f.dp) },
+                    blurRadius = 8.dp,
+                    lensNear = 12.dp,
+                    lensFar = 16.dp,
+                    highlightAlpha = 0.75f,
+                    shadowColor = Color.Black.copy(alpha = 0.35f)
                 )
                 .clip(TileShape),
             contentAlignment = Alignment.Center
@@ -454,7 +482,7 @@ private fun FavoriteTile(
 
 @Composable
 private fun AddTile(
-    backdrop: Backdrop,
+    backdrop: Backdrop?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -482,16 +510,17 @@ private fun AddTile(
         Box(
             modifier = Modifier
                 .size(62.dp)
-                .drawBackdrop(
+                .safeGlass(
                     backdrop = backdrop,
-                    shape = { RoundedRectangle(18f.dp) },
-                    effects = {
-                        vibrancy()
-                        blur(8f.dp.toPx())
-                        lens(12f.dp.toPx(), 16f.dp.toPx())
-                    },
-                    highlight = { Highlight(width = 1.dp, alpha = 0.5f) },
-                    onDrawSurface = { drawRect(Color(0x18FFFFFF)) }
+                    shape = TileShape,
+                    backdropShape = { RoundedRectangle(18f.dp) },
+                    blurRadius = 8.dp,
+                    lensNear = 12.dp,
+                    lensFar = 16.dp,
+                    highlightAlpha = 0.5f,
+                    fillBrush = Brush.verticalGradient(
+                        colors = listOf(Color(0x22FFFFFF), Color(0x10FFFFFF))
+                    )
                 )
                 .clip(TileShape),
             contentAlignment = Alignment.Center
@@ -884,7 +913,7 @@ fun AppleStartPage(
     onSelectBookmark: (String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
+    backdrop: Backdrop? = null,
     modifier: Modifier = Modifier
 ) = StartPage(
     bookmarks = bookmarks,
