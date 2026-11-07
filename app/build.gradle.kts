@@ -18,6 +18,18 @@ android {
         buildConfigField("long", "BUILD_TIME", "${buildEpoch}L")
     }
 
+    signingConfigs {
+        getByName("debug") {
+            val ksFile = rootProject.file("keystore/debug.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = "androiddebugkey"
+                keyAlias = "androiddebugkey"
+                keyPassword = "androiddebugkey"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

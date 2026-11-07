@@ -35,11 +35,4 @@
         android:strokeWidth="4"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-
-    <!-- High-tech Browser Navigation Compass Dot -->
-    <path
-        android:pathData="M38,54 A3,3 0 1,1 38,54.01"
-        android:strokeColor="#FF00E5FF"
-        android:strokeWidth="3.5"
-        android:strokeLineCap="round" />
 </vector>
