@@ -9,7 +9,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -102,6 +104,51 @@ private val LiquidGlassFillBrush = Brush.verticalGradient(
         Color(0xCC0E1018)
     )
 )
+
+private object SafeBackdropRenderer {
+    fun applyBackdrop(modifier: Modifier, backdrop: Backdrop): Modifier {
+        return modifier.drawBackdrop(
+            backdrop = backdrop,
+            shape = { Capsule() },
+            effects = {
+                vibrancy()
+                blur(12f.dp.toPx())
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    lens(16f.dp.toPx(), 24f.dp.toPx())
+                }
+            },
+            highlight = {
+                Highlight(
+                    width = 1.dp,
+                    alpha = 0.85f
+                )
+            },
+            shadow = {
+                Shadow(
+                    radius = 20.dp,
+                    color = Color.Black.copy(alpha = 0.5f)
+                )
+            },
+            onDrawSurface = {
+                drawRect(LiquidGlassFillBrush)
+            }
+        )
+    }
+}
+
+private fun Modifier.liquidGlassBar(backdrop: Backdrop): Modifier {
+    return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        try {
+            SafeBackdropRenderer.applyBackdrop(this, backdrop)
+        } catch (_: Throwable) {
+            this.background(LiquidGlassFillBrush, PillShape)
+                .border(BorderStroke(1.dp, Color(0x35FFFFFF)), PillShape)
+        }
+    } else {
+        this.background(LiquidGlassFillBrush, PillShape)
+            .border(BorderStroke(1.dp, Color(0x35FFFFFF)), PillShape)
+    }
+}
 
 private val BottomScrimBrush = Brush.verticalGradient(
     colors = listOf(
@@ -212,30 +259,7 @@ fun BenBottomBar(
                     scaleX = 1f + l * (STRETCH * 0.35f)
                     scaleY = 1f - l * (STRETCH * SQUASH * 0.35f)
                 }
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { Capsule() },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true, chromaticAberration = true)
-                    },
-                    highlight = {
-                        Highlight(
-                            width = 1.dp,
-                            alpha = 0.85f
-                        )
-                    },
-                    shadow = {
-                        Shadow(
-                            radius = 20.dp,
-                            color = Color.Black.copy(alpha = 0.5f)
-                        )
-                    },
-                    onDrawSurface = {
-                        drawRect(LiquidGlassFillBrush)
-                    }
-                )
+                .liquidGlassBar(backdrop)
                 .clip(PillShape)
                 .padding(horizontal = if (mode == BarMode.Collapsed) 8.dp else 4.dp),
             contentAlignment = Alignment.Center
@@ -422,25 +446,9 @@ fun BenBottomBar(
                                     .weight(1f)
                                     .height(36.dp)
                                     .padding(horizontal = 4.dp)
-                                    .drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { Capsule() },
-                                        effects = {
-                                            vibrancy()
-                                            blur(6f.dp.toPx())
-                                            lens(8f.dp.toPx(), 12f.dp.toPx())
-                                        },
-                                        highlight = {
-                                            Highlight(
-                                                width = 0.5.dp,
-                                                alpha = 0.6f
-                                            )
-                                        },
-                                        onDrawSurface = {
-                                            drawRect(Color(0x22FFFFFF))
-                                        }
-                                    )
                                     .clip(PillShape)
+                                    .background(Color(0x22FFFFFF))
+                                    .border(BorderStroke(0.5.dp, Color(0x35FFFFFF)), PillShape)
                                     .clickable(
                                         interactionSource = capsuleSource,
                                         indication = null,
