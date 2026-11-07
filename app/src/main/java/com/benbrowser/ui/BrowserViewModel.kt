@@ -37,6 +37,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     )
     val state: StateFlow<BrowserState> = _state.asStateFlow()
 
+    private val _isBarMinimized = MutableStateFlow(false)
+    val isBarMinimized: StateFlow<Boolean> = _isBarMinimized.asStateFlow()
+
     fun checkForUpdates() {
         viewModelScope.launch {
             appUpdater.checkForUpdates()
@@ -55,6 +58,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val trimmed = input.trim()
         if (trimmed.isBlank()) return
         val resolved = resolveUrl(trimmed, _state.value.searchEngine)
+        _isBarMinimized.value = false
         _state.update {
             it.copy(
                 currentUrl = resolved,
@@ -75,6 +79,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun openStartPage() {
+        _isBarMinimized.value = false
         _state.update {
             it.copy(
                 isStartPage = true,
@@ -93,6 +98,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun setEditingUrl(editing: Boolean) {
         if (_state.value.isEditingUrl == editing) return
+        if (editing) _isBarMinimized.value = false
         _state.update {
             it.copy(
                 isEditingUrl = editing,
@@ -104,8 +110,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun setBarMinimized(minimized: Boolean) {
         val cur = _state.value
         val target = if (cur.isStartPage || cur.isEditingUrl) false else minimized
-        if (cur.isBarMinimized == target) return
-        _state.update { it.copy(isBarMinimized = target) }
+        if (_isBarMinimized.value != target) {
+            _isBarMinimized.value = target
+        }
     }
 
     fun setSearchEngine(engine: String) {

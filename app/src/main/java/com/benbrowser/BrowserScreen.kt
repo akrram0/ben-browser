@@ -1,7 +1,6 @@
 package com.benbrowser
 
 import android.content.Context
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -35,8 +34,6 @@ import com.benbrowser.ui.components.BenBottomBar
 import com.benbrowser.ui.components.BookmarksSheet
 import com.benbrowser.ui.components.SettingsSheet
 import com.benbrowser.ui.components.StartPage
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
@@ -74,12 +71,12 @@ fun BrowserScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val isBarMinimized by viewModel.isBarMinimized.collectAsState()
     val updateInfo by viewModel.updateState.collectAsState()
     var geckoViewInstance by remember { mutableStateOf<GeckoView?>(null) }
     var isEngineReady by remember { mutableStateOf(false) }
 
     var geckoSession by remember { mutableStateOf<GeckoSession?>(null) }
-    val backdrop = rememberLayerBackdrop()
 
     // Safely initialize GeckoEngine and GeckoSession asynchronously without blocking composition
     LaunchedEffect(Unit) {
@@ -143,13 +140,9 @@ fun BrowserScreen(
                     viewModel.onReceivedTitle(title)
                 }
 
-                override fun onFirstContentfulPaint(session: GeckoSession) {
-                    geckoViewInstance?.alpha = 1f
-                }
+                override fun onFirstContentfulPaint(session: GeckoSession) {}
 
-                override fun onFirstComposite(session: GeckoSession) {
-                    geckoViewInstance?.alpha = 1f
-                }
+                override fun onFirstComposite(session: GeckoSession) {}
 
                 override fun onCrash(session: GeckoSession) {
                     try {
@@ -168,7 +161,6 @@ fun BrowserScreen(
 
             var lastScrollY = 0
             var scrollAccum = 0
-            var latchedMinimized = false
 
             session.scrollDelegate = object : GeckoSession.ScrollDelegate {
                 override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
@@ -182,16 +174,11 @@ fun BrowserScreen(
 
                     if (scrollY < 60) {
                         scrollAccum = 0
-                        if (latchedMinimized) {
-                            latchedMinimized = false
-                            viewModel.setBarMinimized(false)
-                        }
-                    } else if (scrollAccum > 120 && scrollY > 160 && !latchedMinimized) {
-                        latchedMinimized = true
+                        viewModel.setBarMinimized(false)
+                    } else if (scrollAccum > 140 && scrollY > 180) {
                         scrollAccum = 0
                         viewModel.setBarMinimized(true)
-                    } else if (scrollAccum < -90 && latchedMinimized) {
-                        latchedMinimized = false
+                    } else if (scrollAccum < -100) {
                         scrollAccum = 0
                         viewModel.setBarMinimized(false)
                     }
@@ -222,7 +209,7 @@ fun BrowserScreen(
                 isEngineReady = true
                 val view = geckoViewInstance
                 if (view != null) {
-                    view.alpha = 1f
+                    view.visibility = View.VISIBLE
                     session.loadUri(targetUrl)
                     viewModel.onUrlLoadConsumed()
                 }
@@ -230,12 +217,12 @@ fun BrowserScreen(
         }
     }
 
-    // Toggle GeckoView alpha
+    // Toggle GeckoView visibility
     LaunchedEffect(state.isStartPage) {
         geckoViewInstance?.let { view ->
-            val targetAlpha = if (state.isStartPage) 0f else 1f
-            if (view.alpha != targetAlpha) {
-                view.alpha = targetAlpha
+            val targetVis = if (state.isStartPage) View.INVISIBLE else View.VISIBLE
+            if (view.visibility != targetVis) {
+                view.visibility = targetVis
             }
         }
     }
@@ -246,7 +233,6 @@ fun BrowserScreen(
             state.isEditingUrl -> viewModel.setEditingUrl(false)
             state.canGoBack && !state.isStartPage -> {
                 try {
-                    geckoViewInstance?.alpha = 1f
                     geckoSession?.goBack()
                 } catch (_: Throwable) {}
             }
@@ -259,15 +245,9 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(BgCanvas)
     ) {
-        // 1. Web View Layer: Apply layerBackdrop exclusively to web content (Android 12+)
+        // 1. Web View Layer: Direct Hardware Surface Scanout (120 FPS APZ off-thread scrolling)
         val currentSession = geckoSession
         if (isEngineReady && currentSession != null) {
-            val webModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Modifier.fillMaxSize().layerBackdrop(backdrop)
-            } else {
-                Modifier.fillMaxSize()
-            }
-
             AndroidView(
                 factory = { ctx ->
                     try {
@@ -280,10 +260,9 @@ fun BrowserScreen(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
-                            setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW)
+                            setViewBackend(GeckoView.BACKEND_SURFACE_VIEW)
                             setBackgroundColor(android.graphics.Color.parseColor("#0B0C0E"))
-                            visibility = View.VISIBLE
-                            alpha = if (state.isStartPage) 0f else 1f
+                            visibility = if (state.isStartPage) View.INVISIBLE else View.VISIBLE
 
                             ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
                                 if (v.hasFocus()) {
@@ -304,16 +283,16 @@ fun BrowserScreen(
                     if (geckoViewInstance != view && view is GeckoView) {
                         geckoViewInstance = view
                     }
-                    val targetAlpha = if (state.isStartPage) 0f else 1f
-                    if (view.alpha != targetAlpha) {
-                        view.alpha = targetAlpha
+                    val targetVis = if (state.isStartPage) View.INVISIBLE else View.VISIBLE
+                    if (view.visibility != targetVis) {
+                        view.visibility = targetVis
                     }
                 },
-                modifier = webModifier
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        // 2. Start Page Layer: completely detached from backdrop, zero feedback loop, 120 FPS
+        // 2. Start Page Layer: completely detached, zero feedback loop, 120 FPS
         AnimatedVisibility(
             visible = state.isStartPage,
             enter = fadeIn(tween(140, easing = FastOutSlowInEasing)),
@@ -337,14 +316,13 @@ fun BrowserScreen(
             )
         }
 
-        // 3. Floating Apple Bottom Bar: safely samples backdrop over web pages
+        // 3. Floating Apple Bottom Bar: decoupled from BrowserScreen recomposition
         BenBottomBar(
             state = state,
-            backdrop = backdrop,
+            isBarMinimized = isBarMinimized,
             onBack = {
                 if (state.canGoBack && !state.isStartPage) {
                     try {
-                        geckoViewInstance?.alpha = 1f
                         geckoSession?.goBack()
                     } catch (_: Throwable) {}
                 } else {
@@ -354,7 +332,6 @@ fun BrowserScreen(
             onForward = {
                 if (state.canGoForward) {
                     try {
-                        geckoViewInstance?.alpha = 1f
                         geckoSession?.goForward()
                     } catch (_: Throwable) {}
                 }

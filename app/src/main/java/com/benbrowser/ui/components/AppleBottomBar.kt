@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -80,15 +81,6 @@ import com.benbrowser.theme.DisabledTint
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.benbrowser.ui.BrowserState
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import com.kyant.shapes.Capsule
 import kotlin.math.abs
 
 private val BenDpSpring = spring<Dp>(dampingRatio = 0.74f, stiffness = 340f)
@@ -98,57 +90,22 @@ private const val SQUASH = 0.45f
 val FLOATING_BAR_MAX_WIDTH = 440.dp
 private val PillShape = RoundedCornerShape(percent = 50)
 
-private val LiquidGlassFillBrush = Brush.verticalGradient(
-    colors = listOf(
-        Color(0x99181B26),
-        Color(0xCC0E1018)
+private val LiquidGlassPillBorder = BorderStroke(
+    width = 1.dp,
+    brush = Brush.verticalGradient(
+        colors = listOf(
+            Color(0x60FFFFFF),
+            Color(0x18FFFFFF)
+        )
     )
 )
 
-private object SafeBackdropRenderer {
-    fun applyBackdrop(modifier: Modifier, backdrop: Backdrop): Modifier {
-        return modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = { Capsule() },
-            effects = {
-                vibrancy()
-                blur(12f.dp.toPx())
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    lens(16f.dp.toPx(), 24f.dp.toPx())
-                }
-            },
-            highlight = {
-                Highlight(
-                    width = 1.dp,
-                    alpha = 0.85f
-                )
-            },
-            shadow = {
-                Shadow(
-                    radius = 20.dp,
-                    color = Color.Black.copy(alpha = 0.5f)
-                )
-            },
-            onDrawSurface = {
-                drawRect(LiquidGlassFillBrush)
-            }
-        )
-    }
-}
-
-private fun Modifier.liquidGlassBar(backdrop: Backdrop): Modifier {
-    return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-        try {
-            SafeBackdropRenderer.applyBackdrop(this, backdrop)
-        } catch (_: Throwable) {
-            this.background(LiquidGlassFillBrush, PillShape)
-                .border(BorderStroke(1.dp, Color(0x35FFFFFF)), PillShape)
-        }
-    } else {
-        this.background(LiquidGlassFillBrush, PillShape)
-            .border(BorderStroke(1.dp, Color(0x35FFFFFF)), PillShape)
-    }
-}
+private val LiquidGlassFillBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xCC161822),
+        Color(0xF00B0C0E)
+    )
+)
 
 private val BottomScrimBrush = Brush.verticalGradient(
     colors = listOf(
@@ -166,6 +123,7 @@ private enum class BarMode {
 @Composable
 fun BenBottomBar(
     state: BrowserState,
+    isBarMinimized: Boolean = state.isBarMinimized,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -174,7 +132,6 @@ fun BenBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -198,7 +155,7 @@ fun BenBottomBar(
         label = "ben_progress"
     )
 
-    val isMinimized = state.isBarMinimized && !state.isStartPage && !state.isEditingUrl
+    val isMinimized = isBarMinimized && !state.isStartPage && !state.isEditingUrl
     val mode = when {
         state.isEditingUrl -> BarMode.Editing
         isMinimized -> BarMode.Collapsed
@@ -259,7 +216,14 @@ fun BenBottomBar(
                     scaleX = 1f + l * (STRETCH * 0.35f)
                     scaleY = 1f - l * (STRETCH * SQUASH * 0.35f)
                 }
-                .liquidGlassBar(backdrop)
+                .shadow(
+                    elevation = 16.dp,
+                    shape = PillShape,
+                    spotColor = Color.Black.copy(alpha = 0.55f),
+                    ambientColor = Color.Black.copy(alpha = 0.35f)
+                )
+                .background(LiquidGlassFillBrush, PillShape)
+                .border(LiquidGlassPillBorder, PillShape)
                 .clip(PillShape)
                 .padding(horizontal = if (mode == BarMode.Collapsed) 8.dp else 4.dp),
             contentAlignment = Alignment.Center
@@ -591,6 +555,7 @@ fun BenBottomBar(
 @Composable
 fun AppleBottomBar(
     state: BrowserState,
+    isBarMinimized: Boolean = state.isBarMinimized,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -599,10 +564,10 @@ fun AppleBottomBar(
     onOpenStartPage: () -> Unit,
     onEditUrl: (Boolean) -> Unit,
     onRestoreBar: () -> Unit,
-    backdrop: Backdrop = rememberLayerBackdrop(),
     modifier: Modifier = Modifier
 ) = BenBottomBar(
     state = state,
+    isBarMinimized = isBarMinimized,
     onBack = onBack,
     onForward = onForward,
     onReload = onReload,
@@ -611,6 +576,5 @@ fun AppleBottomBar(
     onOpenStartPage = onOpenStartPage,
     onEditUrl = onEditUrl,
     onRestoreBar = onRestoreBar,
-    backdrop = backdrop,
     modifier = modifier
 )
