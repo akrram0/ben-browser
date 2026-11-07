@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -75,7 +74,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.benbrowser.R
-import com.benbrowser.theme.AccentBlue
+import com.benbrowser.theme.AccentCyan
 import com.benbrowser.theme.DisabledTint
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
@@ -91,9 +90,9 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import kotlin.math.abs
 
-private val BitChordDpSpring = spring<Dp>(dampingRatio = 0.72f, stiffness = 320f)
-private const val STRETCH = 0.16f
-private const val SQUASH = 0.5f
+private val BenDpSpring = spring<Dp>(dampingRatio = 0.74f, stiffness = 340f)
+private const val STRETCH = 0.14f
+private const val SQUASH = 0.45f
 
 val FLOATING_BAR_MAX_WIDTH = 440.dp
 private val PillShape = RoundedCornerShape(percent = 50)
@@ -101,25 +100,15 @@ private val PillShape = RoundedCornerShape(percent = 50)
 // Liquid Glass: translucent refraction fill with specular highlight border
 private val LiquidGlassFillBrush = Brush.verticalGradient(
     colors = listOf(
-        Color(0x991E2230),
-        Color(0xBB12141D)
-    )
-)
-
-private val LiquidGlassSpecularBorder = BorderStroke(
-    width = 1.dp,
-    brush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0x60FFFFFF),
-            Color(0x18FFFFFF)
-        )
+        Color(0x99181B26),
+        Color(0xCC0E1018)
     )
 )
 
 private val BottomScrimBrush = Brush.verticalGradient(
     colors = listOf(
         Color.Transparent,
-        Color(0x80050608)
+        Color(0x99050608)
     )
 )
 
@@ -130,7 +119,7 @@ private enum class BarMode {
 }
 
 @Composable
-fun AppleBottomBar(
+fun BenBottomBar(
     state: BrowserState,
     onBack: () -> Unit,
     onForward: () -> Unit,
@@ -161,7 +150,7 @@ fun AppleBottomBar(
     val animatedProgress by animateFloatAsState(
         targetValue = if (state.isLoading) state.progress.coerceIn(0.08f, 1f) else 0f,
         animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
-        label = "safari_progress"
+        label = "ben_progress"
     )
 
     val isMinimized = state.isBarMinimized && !state.isStartPage && !state.isEditingUrl
@@ -171,13 +160,18 @@ fun AppleBottomBar(
         else -> BarMode.Expanded
     }
 
+    var hasComposed by remember { mutableStateOf(false) }
     LaunchedEffect(mode) {
-        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (hasComposed) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        } else {
+            hasComposed = true
+        }
     }
 
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val expandedWidth = minOf(screenWidthDp - 28.dp, FLOATING_BAR_MAX_WIDTH)
-    val collapsedWidth = 176.dp
+    val expandedWidth = minOf(screenWidthDp - 24.dp, FLOATING_BAR_MAX_WIDTH)
+    val collapsedWidth = 168.dp
 
     val targetWidth = when (mode) {
         BarMode.Collapsed -> collapsedWidth
@@ -188,23 +182,17 @@ fun AppleBottomBar(
         else -> 52.dp
     }
 
-    // BitChord spring physics for bar morph
+    // High-performance spring physics for bar morph
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
-        animationSpec = BitChordDpSpring,
-        label = "bitchord_bar_width"
+        animationSpec = BenDpSpring,
+        label = "ben_bar_width"
     )
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = BitChordDpSpring,
-        label = "bitchord_bar_height"
+        animationSpec = BenDpSpring,
+        label = "ben_bar_height"
     )
-
-    // BitChord momentum squash & stretch while morphing
-    val travelDistance = abs(targetWidth.value - animatedWidth.value)
-    val lag = (travelDistance / 140f).coerceIn(0f, 1f)
-    val morphScaleX = 1f + lag * (STRETCH * 0.35f)
-    val morphScaleY = 1f - lag * (STRETCH * SQUASH * 0.35f)
 
     val floatingBarInsets = WindowInsets.navigationBars.union(WindowInsets(bottom = 10.dp))
 
@@ -214,16 +202,19 @@ fun AppleBottomBar(
             .background(BottomScrimBrush)
             .imePadding()
             .windowInsetsPadding(floatingBarInsets)
-            .padding(horizontal = 14.dp, vertical = if (isMinimized) 4.dp else 6.dp),
+            .padding(horizontal = 12.dp, vertical = if (isMinimized) 4.dp else 6.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Box(
             modifier = Modifier
                 .width(animatedWidth)
                 .height(animatedHeight)
+                // GPU-accelerated layer transform: zero recompositions during physics squash & stretch
                 .graphicsLayer {
-                    scaleX = morphScaleX
-                    scaleY = morphScaleY
+                    val travel = abs(targetWidth.toPx() - animatedWidth.toPx())
+                    val l = (travel / 140.dp.toPx()).coerceIn(0f, 1f)
+                    scaleX = 1f + l * (STRETCH * 0.35f)
+                    scaleY = 1f - l * (STRETCH * SQUASH * 0.35f)
                 }
                 .drawBackdrop(
                     backdrop = backdrop,
@@ -242,7 +233,7 @@ fun AppleBottomBar(
                     shadow = {
                         Shadow(
                             radius = 20.dp,
-                            color = Color.Black.copy(alpha = 0.45f)
+                            color = Color.Black.copy(alpha = 0.5f)
                         )
                     },
                     onDrawSurface = {
@@ -263,31 +254,32 @@ fun AppleBottomBar(
             ) { targetMode ->
                 when (targetMode) {
                     BarMode.Collapsed -> {
-                        // Collapsed Pill: Minimalist domain view, tap anywhere to expand
+                        // Collapsed Pill: Minimalist domain view, tap anywhere to restore
+                        val collapsedSource = remember { MutableInteractionSource() }
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(PillShape)
                                 .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
+                                    interactionSource = collapsedSource,
                                     indication = null,
                                     onClick = onRestoreBar
                                 )
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_apple_lock),
                                 contentDescription = "Secure",
-                                tint = TextSecondary,
+                                tint = AccentCyan,
                                 modifier = Modifier.size(11.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = state.displayUrl.ifBlank { "Search" },
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 color = TextPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -316,8 +308,8 @@ fun AppleBottomBar(
                             Icon(
                                 painter = painterResource(R.drawable.ic_apple_search),
                                 contentDescription = "Search",
-                                tint = AccentBlue,
-                                modifier = Modifier.size(16.dp)
+                                tint = AccentCyan,
+                                modifier = Modifier.size(17.dp)
                             )
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -332,7 +324,7 @@ fun AppleBottomBar(
                                     fontFamily = FontFamily.Default,
                                     fontWeight = FontWeight.Normal
                                 ),
-                                cursorBrush = SolidColor(AccentBlue),
+                                cursorBrush = SolidColor(AccentCyan),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Uri,
                                     imeAction = ImeAction.Go
@@ -372,7 +364,7 @@ fun AppleBottomBar(
                                 text = "Cancel",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AccentBlue,
+                                color = AccentCyan,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
@@ -386,7 +378,7 @@ fun AppleBottomBar(
                     }
 
                     BarMode.Expanded -> {
-                        // Normal Expanded Dock: 5 controls
+                        // Normal Expanded Dock: 5 controls with 45% touch target ratio
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -397,7 +389,7 @@ fun AppleBottomBar(
                             // Left: Back & Forward
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(1.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 IconButton(
                                     onClick = onBack,
@@ -406,12 +398,12 @@ fun AppleBottomBar(
                                         contentColor = TextPrimary,
                                         disabledContentColor = DisabledTint
                                     ),
-                                    modifier = Modifier.size(38.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_apple_back),
                                         contentDescription = "Back",
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
 
@@ -422,17 +414,18 @@ fun AppleBottomBar(
                                         contentColor = TextPrimary,
                                         disabledContentColor = DisabledTint
                                     ),
-                                    modifier = Modifier.size(38.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_apple_forward),
                                         contentDescription = "Forward",
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
 
-                            // Center: Liquid Glass URL Capsule powered by AndroidLiquidGlass
+                            // Center: Liquid Glass URL Capsule
+                            val capsuleSource = remember { MutableInteractionSource() }
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -458,7 +451,7 @@ fun AppleBottomBar(
                                     )
                                     .clip(PillShape)
                                     .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
+                                        interactionSource = capsuleSource,
                                         indication = null,
                                         onClick = { onEditUrl(true) }
                                     )
@@ -475,11 +468,11 @@ fun AppleBottomBar(
                                             painter = painterResource(R.drawable.ic_apple_search),
                                             contentDescription = "Search",
                                             tint = TextSecondary,
-                                            modifier = Modifier.size(13.dp)
+                                            modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Search or enter address",
+                                            text = "Search or type URL",
                                             fontSize = 12.sp,
                                             color = TextSecondary,
                                             fontWeight = FontWeight.Normal,
@@ -496,8 +489,8 @@ fun AppleBottomBar(
                                         Icon(
                                             painter = painterResource(R.drawable.ic_apple_lock),
                                             contentDescription = "Secure",
-                                            tint = TextSecondary,
-                                            modifier = Modifier.size(11.dp)
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(12.dp)
                                         )
 
                                         Text(
@@ -513,12 +506,13 @@ fun AppleBottomBar(
                                                 .padding(horizontal = 6.dp)
                                         )
 
+                                        val reloadSource = remember { MutableInteractionSource() }
                                         Box(
                                             modifier = Modifier
-                                                .size(24.dp)
+                                                .size(26.dp)
                                                 .clip(CircleShape)
                                                 .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    interactionSource = reloadSource,
                                                     indication = null,
                                                     onClick = onReload
                                                 ),
@@ -528,7 +522,7 @@ fun AppleBottomBar(
                                                 painter = painterResource(R.drawable.ic_apple_reload),
                                                 contentDescription = "Reload",
                                                 tint = TextSecondary,
-                                                modifier = Modifier.size(13.dp)
+                                                modifier = Modifier.size(14.dp)
                                             )
                                         }
                                     }
@@ -542,7 +536,7 @@ fun AppleBottomBar(
                                             .height(2.dp)
                                             .align(Alignment.BottomCenter)
                                             .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp)),
-                                        color = AccentBlue,
+                                        color = AccentCyan,
                                         trackColor = Color.Transparent
                                     )
                                 }
@@ -551,35 +545,40 @@ fun AppleBottomBar(
                             // Right: Bookmarks & Home (Start Page)
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(1.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 IconButton(
                                     onClick = onOpenBookmarks,
                                     colors = IconButtonDefaults.iconButtonColors(
-                                        contentColor = if (state.isCurrentBookmarked) AccentBlue else TextPrimary,
+                                        contentColor = if (state.isCurrentBookmarked) AccentCyan else TextPrimary,
                                         disabledContentColor = DisabledTint
                                     ),
-                                    modifier = Modifier.size(38.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.ic_apple_star),
+                                        painter = painterResource(
+                                            if (state.isCurrentBookmarked) R.drawable.ic_apple_star_filled
+                                            else R.drawable.ic_apple_star
+                                        ),
                                         contentDescription = "Bookmarks",
-                                        modifier = Modifier.size(16.dp)
+                                        tint = if (state.isCurrentBookmarked) AccentCyan else TextPrimary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
 
                                 IconButton(
                                     onClick = onOpenStartPage,
                                     colors = IconButtonDefaults.iconButtonColors(
-                                        contentColor = if (state.isStartPage) AccentBlue else TextPrimary,
+                                        contentColor = if (state.isStartPage) AccentCyan else TextPrimary,
                                         disabledContentColor = DisabledTint
                                     ),
-                                    modifier = Modifier.size(38.dp)
+                                    modifier = Modifier.size(40.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_apple_home),
                                         contentDescription = "Start Page / Home",
-                                        modifier = Modifier.size(16.dp)
+                                        tint = if (state.isStartPage) AccentCyan else TextPrimary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
@@ -590,3 +589,31 @@ fun AppleBottomBar(
         }
     }
 }
+
+// Backward compatibility alias
+@Composable
+fun AppleBottomBar(
+    state: BrowserState,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+    onReload: () -> Unit,
+    onSubmitUrl: (String) -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onOpenStartPage: () -> Unit,
+    onEditUrl: (Boolean) -> Unit,
+    onRestoreBar: () -> Unit,
+    backdrop: Backdrop = rememberLayerBackdrop(),
+    modifier: Modifier = Modifier
+) = BenBottomBar(
+    state = state,
+    onBack = onBack,
+    onForward = onForward,
+    onReload = onReload,
+    onSubmitUrl = onSubmitUrl,
+    onOpenBookmarks = onOpenBookmarks,
+    onOpenStartPage = onOpenStartPage,
+    onEditUrl = onEditUrl,
+    onRestoreBar = onRestoreBar,
+    backdrop = backdrop,
+    modifier = modifier
+)

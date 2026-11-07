@@ -59,8 +59,10 @@ import com.benbrowser.R
 import com.benbrowser.data.Bookmark
 import com.benbrowser.data.BookmarkRepository
 import com.benbrowser.data.UpdateInfo
-import com.benbrowser.theme.AccentBlue
+import com.benbrowser.theme.AccentCyan
+import com.benbrowser.theme.AccentCyanGlow
 import com.benbrowser.theme.BgCanvas
+import com.benbrowser.theme.CardSurface
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
 import com.kyant.backdrop.Backdrop
@@ -94,19 +96,8 @@ private val LiquidGlassFillBrush = Brush.verticalGradient(
 
 private val TileShape = RoundedCornerShape(18.dp)
 
-private val GREETINGS = listOf(
-    "What are we cooking today?",
-    "Locked in.",
-    "Main character energy.",
-    "Search the void.",
-    "No cap, let's browse.",
-    "Doomscrolling or doing work?",
-    "Late night thoughts hit different.",
-    "Living rent-free in your tabs."
-)
-
 @Composable
-fun AppleStartPage(
+fun StartPage(
     bookmarks: List<Bookmark>,
     searchEngine: String,
     isUpdateAvailable: Boolean = false,
@@ -122,14 +113,13 @@ fun AppleStartPage(
     }
     val rows = remember(allItems) { allItems.chunked(4) }
 
-    val greeting = remember { GREETINGS.random() }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-    val vibeSubtitle = remember(currentHour) {
+    val (greetingTitle, greetingSubtitle) = remember(currentHour) {
         when (currentHour) {
-            in 5..11 -> "Morning focus • Stay curious"
-            in 12..17 -> "Afternoon flow • In the zone"
-            in 18..22 -> "Evening wind down • Pure vibe"
-            else -> "Late night mode • The void awaits"
+            in 5..11 -> "Good Morning" to "Fast, private, and distraction-free."
+            in 12..17 -> "Good Afternoon" to "Ready to explore the open web."
+            in 18..22 -> "Good Evening" to "Unwind, research, and discover."
+            else -> "Late Night Mode" to "Pure speed in the dark."
         }
     }
 
@@ -145,38 +135,67 @@ fun AppleStartPage(
                 .widthIn(max = FLOATING_BAR_MAX_WIDTH)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 18.dp)
-                .padding(bottom = 100.dp)
+                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .padding(bottom = 110.dp)
         ) {
-            // Section 1: Dynamic Gen-Z Welcome Header + Liquid Glass Settings Button
+            // Section 1: Ben Browser Brand Header + Settings Action
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 22.dp),
+                    .padding(bottom = 24.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = greeting,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Default,
-                        color = TextPrimary,
-                        lineHeight = 30.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = vibeSubtitle,
-                        fontSize = 13.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Normal
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Ben Glowing Brand Monogram Pill
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { RoundedRectangle(12f.dp) },
+                                effects = {
+                                    vibrancy()
+                                    blur(8f.dp.toPx())
+                                    lens(10f.dp.toPx(), 14f.dp.toPx())
+                                },
+                                highlight = { Highlight(width = 1.dp, alpha = 0.8f) },
+                                shadow = { Shadow(radius = 12.dp, color = AccentCyanGlow) },
+                                onDrawSurface = { drawRect(LiquidGlassFillBrush) }
+                            )
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "B",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = greetingTitle,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            lineHeight = 28.sp
+                        )
+                        Text(
+                            text = greetingSubtitle,
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Liquid Glass Settings Pill powered by AndroidLiquidGlass
+                // Settings Pill powered by Liquid Glass
+                val settingsSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .size(42.dp)
@@ -194,7 +213,7 @@ fun AppleStartPage(
                         )
                         .clip(CircleShape)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = settingsSource,
                             indication = null,
                             onClick = onOpenSettings
                         ),
@@ -212,15 +231,16 @@ fun AppleStartPage(
                             modifier = Modifier
                                 .size(8.dp)
                                 .align(Alignment.TopEnd)
-                                .padding(top = 2.dp, end = 2.dp)
+                                .padding(top = 4.dp, end = 4.dp)
                                 .clip(CircleShape)
-                                .background(AccentBlue)
+                                .background(AccentCyan)
                         )
                     }
                 }
             }
 
-            // Section 2: Hero Liquid Glass Search Capsule powered by AndroidLiquidGlass
+            // Section 2: Hero Liquid Glass Search Capsule
+            val searchSource = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -239,7 +259,7 @@ fun AppleStartPage(
                     )
                     .clip(CircleShape)
                     .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
+                        interactionSource = searchSource,
                         indication = null,
                         onClick = onOpenSearch
                     )
@@ -253,27 +273,28 @@ fun AppleStartPage(
                     Icon(
                         painter = painterResource(R.drawable.ic_apple_search),
                         contentDescription = "Search",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(17.dp)
+                        tint = AccentCyan,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Search the void or enter address...",
+                        text = "Search with $searchEngine or enter address...",
                         fontSize = 14.sp,
                         color = TextSecondary,
                         fontWeight = FontWeight.Normal,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // Section 3: Favorites Section Title
+            // Section 3: Favorites Section Title + Count Chip
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 18.dp),
+                    .padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -283,6 +304,20 @@ fun AppleStartPage(
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
+
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0x18FFFFFF))
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "${bookmarks.size}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                }
             }
 
             // Section 4: 4-Column Liquid Glass App Icons Grid
@@ -290,7 +325,7 @@ fun AppleStartPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 22.dp),
+                        .padding(bottom = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     for (i in 0 until 4) {
@@ -365,7 +400,7 @@ private fun FavoriteTile(
                 onClick = onClick
             )
     ) {
-        // Individual Liquid Glass Container powered by AndroidLiquidGlass
+        // Individual Liquid Glass Container
         Box(
             modifier = Modifier
                 .size(62.dp)
@@ -389,14 +424,14 @@ private fun FavoriteTile(
                     painter = painterResource(brandDrawableId),
                     contentDescription = bookmark.title,
                     tint = Color.Unspecified,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 )
             } else {
-                val monogram = bookmark.title.trim().take(2).uppercase().ifBlank { "?" }
+                val monogram = bookmark.title.trim().take(2).uppercase().ifBlank { "B" }
                 Text(
                     text = monogram,
                     color = TextPrimary,
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -465,7 +500,7 @@ private fun AddTile(
                 text = "+",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Light,
-                color = AccentBlue
+                color = AccentCyan
             )
         }
 
@@ -507,11 +542,11 @@ fun SettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF14161F),
+        containerColor = CardSurface,
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = 10.dp)
                     .width(36.dp)
                     .height(4.dp)
                     .clip(CircleShape)
@@ -523,7 +558,7 @@ fun SettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
             Row(
@@ -534,8 +569,8 @@ fun SettingsSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Settings",
-                    fontSize = 22.sp,
+                    text = "Preferences",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -543,7 +578,7 @@ fun SettingsSheet(
                     text = "Done",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AccentBlue,
+                    color = AccentCyan,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onDismiss)
@@ -555,7 +590,7 @@ fun SettingsSheet(
             Text(
                 text = "Default Search Engine",
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Medium,
                 color = TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -580,7 +615,7 @@ fun SettingsSheet(
                                 if (isSelected) {
                                     Modifier
                                         .background(Color(0x38FFFFFF), CircleShape)
-                                        .border(0.5.dp, Color(0x40FFFFFF), CircleShape)
+                                        .border(0.5.dp, AccentCyan, CircleShape)
                                 } else {
                                     Modifier
                                 }
@@ -592,7 +627,7 @@ fun SettingsSheet(
                             text = engine,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) TextPrimary else TextSecondary
+                            color = if (isSelected) AccentCyan else TextSecondary
                         )
                     }
                 }
@@ -604,7 +639,7 @@ fun SettingsSheet(
             Text(
                 text = "Add to Favorites",
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Medium,
                 color = TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -621,7 +656,7 @@ fun SettingsSheet(
             ) {
                 if (titleInput.isEmpty()) {
                     Text(
-                        text = "Site Name (e.g. X, ChatGPT)",
+                        text = "Site Name (e.g. GitHub, Reddit)",
                         fontSize = 14.sp,
                         color = TextSecondary
                     )
@@ -631,7 +666,7 @@ fun SettingsSheet(
                     onValueChange = { titleInput = it },
                     singleLine = true,
                     textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                    cursorBrush = SolidColor(Color.White),
+                    cursorBrush = SolidColor(AccentCyan),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -656,7 +691,7 @@ fun SettingsSheet(
                 ) {
                     if (urlInput.isEmpty()) {
                         Text(
-                            text = "URL (e.g. x.com)",
+                            text = "URL (e.g. github.com)",
                             fontSize = 14.sp,
                             color = TextSecondary
                         )
@@ -670,7 +705,7 @@ fun SettingsSheet(
                             imeAction = ImeAction.Done
                         ),
                         textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-                        cursorBrush = SolidColor(Color.White),
+                        cursorBrush = SolidColor(AccentCyan),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -682,7 +717,7 @@ fun SettingsSheet(
                         .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color(0x38FFFFFF))
-                        .border(LiquidGlassPillBorder, RoundedCornerShape(12.dp))
+                        .border(BorderStroke(1.dp, AccentCyan), RoundedCornerShape(12.dp))
                         .clickable {
                             if (urlInput.isNotBlank()) {
                                 onAddBookmark(titleInput, urlInput)
@@ -698,16 +733,16 @@ fun SettingsSheet(
                         text = "Add",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = AccentCyan
                     )
                 }
             }
 
-            // Section 3: Application Updates (Plan A GitHub Releases)
+            // Section 3: Application Updates
             Text(
                 text = "Application Updates",
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Medium,
                 color = TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -747,22 +782,21 @@ fun SettingsSheet(
                         if (updateInfo.isChecking) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = Color.White,
+                                color = AccentCyan,
                                 strokeWidth = 2.dp
                             )
                         } else if (updateInfo.isDownloading) {
                             Text(
                                 text = "Downloading...",
                                 fontSize = 13.sp,
-                                color = TextPrimary,
+                                color = AccentCyan,
                                 fontWeight = FontWeight.Bold
                             )
                         } else if (updateInfo.isReadyToInstall) {
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0x38FFFFFF))
-                                    .border(LiquidGlassPillBorder, RoundedCornerShape(8.dp))
+                                    .background(AccentCyan)
                                     .clickable(onClick = onInstallUpdate)
                                     .padding(horizontal = 14.dp, vertical = 6.dp)
                             ) {
@@ -770,15 +804,14 @@ fun SettingsSheet(
                                     text = "Install",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = BgCanvas
                                 )
                             }
                         } else if (updateInfo.isAvailable) {
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0x38FFFFFF))
-                                    .border(LiquidGlassPillBorder, RoundedCornerShape(8.dp))
+                                    .background(AccentCyan)
                                     .clickable(onClick = onDownloadUpdate)
                                     .padding(horizontal = 14.dp, vertical = 6.dp)
                             ) {
@@ -786,15 +819,15 @@ fun SettingsSheet(
                                     text = "Update",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = BgCanvas
                                 )
                             }
                         } else {
                             Text(
                                 text = "Check",
                                 fontSize = 13.sp,
-                                color = TextSecondary,
-                                fontWeight = FontWeight.Medium,
+                                color = AccentCyan,
+                                fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier
                                     .clickable(onClick = onCheckForUpdates)
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -841,3 +874,25 @@ fun SettingsSheet(
         }
     }
 }
+
+// Backward compatibility alias
+@Composable
+fun AppleStartPage(
+    bookmarks: List<Bookmark>,
+    searchEngine: String,
+    isUpdateAvailable: Boolean = false,
+    onSelectBookmark: (String) -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
+    backdrop: Backdrop = rememberLayerBackdrop(),
+    modifier: Modifier = Modifier
+) = StartPage(
+    bookmarks = bookmarks,
+    searchEngine = searchEngine,
+    isUpdateAvailable = isUpdateAvailable,
+    onSelectBookmark = onSelectBookmark,
+    onOpenSearch = onOpenSearch,
+    onOpenSettings = onOpenSettings,
+    backdrop = backdrop,
+    modifier = modifier
+)

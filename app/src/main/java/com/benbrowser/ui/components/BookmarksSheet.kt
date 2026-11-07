@@ -39,7 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.benbrowser.R
 import com.benbrowser.data.Bookmark
-import com.benbrowser.theme.AccentBlue
+import com.benbrowser.theme.AccentCyan
+import com.benbrowser.theme.CardSurface
 import com.benbrowser.theme.GlassBorder
 import com.benbrowser.theme.TextPrimary
 import com.benbrowser.theme.TextSecondary
@@ -59,11 +60,11 @@ fun BookmarksSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF16181D),
+        containerColor = CardSurface,
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = 10.dp)
                     .width(36.dp)
                     .height(4.dp)
                     .clip(CircleShape)
@@ -76,7 +77,7 @@ fun BookmarksSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
             Row(
@@ -87,8 +88,8 @@ fun BookmarksSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Bookmarks",
-                    fontSize = 22.sp,
+                    text = "Favorites & Bookmarks",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Default,
                     color = TextPrimary
@@ -98,8 +99,9 @@ fun BookmarksSheet(
                     text = "Done",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AccentBlue,
+                    color = AccentCyan,
                     modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onDismiss)
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
@@ -111,7 +113,7 @@ fun BookmarksSheet(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF22242B))
+                        .background(Color(0xFF1E212B))
                         .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp))
                         .clickable(onClick = onToggleBookmark)
                         .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -122,15 +124,15 @@ fun BookmarksSheet(
                             if (isCurrentBookmarked) R.drawable.ic_apple_star_filled else R.drawable.ic_apple_star
                         ),
                         contentDescription = "Bookmark",
-                        tint = if (isCurrentBookmarked) AccentBlue else TextPrimary,
+                        tint = if (isCurrentBookmarked) AccentCyan else TextPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (isCurrentBookmarked) "Remove from Favorites" else "Add to Favorites",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = if (isCurrentBookmarked) AccentBlue else TextPrimary,
+                        text = if (isCurrentBookmarked) "Remove from Favorites" else "Add current page to Favorites",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isCurrentBookmarked) AccentCyan else TextPrimary,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -144,8 +146,8 @@ fun BookmarksSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No bookmarks yet",
-                        fontSize = 15.sp,
+                        text = "No favorites saved yet",
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Normal,
                         color = TextSecondary
                     )
@@ -159,26 +161,26 @@ fun BookmarksSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF1E2026))
-                                .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF191C24))
+                                .border(BorderStroke(1.dp, GlassBorder), RoundedCornerShape(14.dp))
                                 .clickable {
                                     onSelectBookmark(bookmark.url)
                                     onDismiss()
                                 }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2C2D35)),
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF242733)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = bookmark.title.trim().take(1).uppercase().ifBlank { "?" },
-                                    color = AccentBlue,
+                                    text = bookmark.title.trim().take(1).uppercase().ifBlank { "B" },
+                                    color = AccentCyan,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -189,8 +191,8 @@ fun BookmarksSheet(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = bookmark.title,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = TextPrimary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

@@ -1,29 +1,39 @@
-# Ben Browser
+# Ben Browser (v2.0)
 
-A minimal, lightweight WebView-based Android browser built with **Kotlin**, **Jetpack Compose**, and **Haze 2.0.1** for hardware-accelerated glassmorphism.
-
-## Step 1 Spike Overview
-
-This initial step implements the core minimal browser architecture:
-- **Single Activity**: `MainActivity` running Compose edge-to-edge.
-- **WebView**: Hardware-accelerated with algorithmic darkening (`WebSettingsCompat`), dark matte base (`#0B0C0E`), and DOM/JS capabilities.
-- **Glass Bottom Bar**: Docked above system navigation bar insets (`navigationBarsPadding()`) and software keyboard (`imePadding()`).
-- **Apple/macOS Dark Minimal Aesthetic**: Restrained palette, system typography (`15sp` URL text), specular edge borders, and full pill shape (`radius_full`).
-- **Navigation Controls**: Back and forward using `AutoMirrored` icons (`Icons.AutoMirrored.Filled.ArrowBack`, `Icons.AutoMirrored.Filled.ArrowForward`) and reload (`Icons.Filled.Refresh`), governed by a single disabled mechanism (`IconButton(enabled = ...)`).
+A high-performance, dark liquid-glass Android browser built with **Kotlin**, **Jetpack Compose**, **Mozilla GeckoView** (WebRender GPU multi-process engine), and **AndroidLiquidGlass** (`io.github.kyant0:backdrop`) for real-time hardware-accelerated refraction and blur.
 
 ---
 
-## Hardware Spike: Testing Haze on WebView
+## What's New in v2.0
 
-### The Hypothesis
-In Android Jetpack Compose, `AndroidView` hosts a native Android `WebView`. Because Chromium rendering often bypasses Compose's canvas layer recording depending on OS version (API 26–30 vs API 31+ RenderNode), `Modifier.hazeSource` may or may not capture the WebView's dynamic content for blur.
+### 1. 🏎️ 120 FPS Scroll & Animation Performance
+- **Zero-recomposition Physics Layer**: Squash & stretch spring dynamics now execute entirely on GPU RenderNodes (`graphicsLayer`), eliminating recomposition churn.
+- **Debounced View Updates**: Fixed `AndroidView` update callbacks and state loops that previously fired on scroll passes.
+- **Optimized UI Allocation**: Cached interaction sources and eliminated repeated composable allocations.
 
-### How to Verify on Device
-1. Build and install the debug APK (locally or via GitHub Actions artifact).
-2. Browse a colorful or high-contrast webpage (e.g. DuckDuckGo or Wikipedia).
-3. Observe the bottom floating pill bar:
-   - **Haze Active**: Content scrolling behind the pill appears frosted and blurred through Haze 2.0.1.
-   - **Spike Toggle**: Long-press anywhere on the bottom bar to instantly switch between **Haze Glass Blur** and the **90% Opaque Fallback** (`#E616181D`). A toast message confirms the mode.
+### 2. ⚡ Distinctive Ben Identity & Brand
+- **Signature Accent**: Electric Cyan (`#00E5FF`) on deep obsidian dark glass (`#0B0C0E`).
+- **Brand Logomark**: Dynamic luminous "B" glass badge on Start Page and new vector app launcher icon with platinum highlights.
+- **Refined Greeting**: Clean, elegant time-aware greeting header ("Good Morning", "Late Night Mode") with active search engine branding.
+
+### 3. 🎨 Refined Vector Icon Suite
+- **Uniform 1.6dp Stroke Weight**: Standardized across all navigation controls, search, bookmarks, settings, and reload.
+- **Modern Bookmark Ribbon**: Replaced dated 5-point star with a sleek bookmark ribbon.
+- **Outline Minimalist Home**: Replaced heavy chunky fill with a clean outline glyph.
+- **45% Golden Touch Ratio**: 18-20dp crisp icons inside 40dp interactive touch targets.
+
+### 4. 💎 True Liquid Glassmorphism
+- **Backdrop Refraction & Lens Distortion**: Live real-time refraction, chromatic aberration, and lens depth using Kyant0 Backdrop.
+- **Specular Highlights**: Specular edge borders (`#2BFFFFFF`) and ambient drop shadows.
+
+---
+
+## Architecture & Tech Stack
+
+- **GeckoView Engine**: `org.mozilla.geckoview:geckoview-arm64-v8a:157.0` running with WebRender GPU acceleration and `BACKEND_TEXTURE_VIEW`.
+- **UI Framework**: Jetpack Compose (BOM `2024.10.01`) + Material 3.
+- **Liquid Glass**: `io.github.kyant0:backdrop:2.0.1` and `io.github.kyant0:shapes:1.2.1`.
+- **Architecture**: MVVM with `BrowserViewModel`, StateFlow, and Jetpack Lifecycle.
 
 ---
 
@@ -40,8 +50,8 @@ A workflow is configured at [`.github/workflows/build.yml`](.github/workflows/bu
 
 Recorded in [`.agent/rules/design.md`](.agent/rules/design.md):
 - `bg_canvas`: `#0B0C0E`
-- `glass_surface_haze`: `#B316181D` (70% opacity)
-- `glass_surface_fallback`: `#E616181D` (90% opacity)
-- `glass_border`: `#1FFFFFFF` (12% specular white highlight)
+- `glass_surface_base`: `#9916181D`
+- `glass_border`: `#2BFFFFFF`
 - `text_primary`: `#F5F5F7`
-- `accent`: `#0A84FF`
+- `text_secondary`: `#8E8E93`
+- `accent`: `#00E5FF` (Electric Cyan)

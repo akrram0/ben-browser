@@ -30,10 +30,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.benbrowser.theme.BgCanvas
 import com.benbrowser.ui.BrowserViewModel
-import com.benbrowser.ui.components.AppleBottomBar
-import com.benbrowser.ui.components.AppleStartPage
+import com.benbrowser.ui.components.BenBottomBar
 import com.benbrowser.ui.components.BookmarksSheet
 import com.benbrowser.ui.components.SettingsSheet
+import com.benbrowser.ui.components.StartPage
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.mozilla.geckoview.GeckoResult
@@ -217,9 +217,13 @@ fun BrowserScreen(
     }
 
     // Toggle GeckoView alpha: stays warm in the hierarchy so TextureView is never destroyed
-    LaunchedEffect(state.isStartPage, geckoViewInstance) {
-        val view = geckoViewInstance ?: return@LaunchedEffect
-        view.alpha = if (state.isStartPage) 0f else 1f
+    LaunchedEffect(state.isStartPage) {
+        geckoViewInstance?.let { view ->
+            val targetAlpha = if (state.isStartPage) 0f else 1f
+            if (view.alpha != targetAlpha) {
+                view.alpha = targetAlpha
+            }
+        }
     }
 
     // System Back Handler: edit mode -> Gecko history -> start page -> exit
@@ -276,8 +280,13 @@ fun BrowserScreen(
                         }
                     },
                     update = { view ->
-                        geckoViewInstance = view
-                        view.alpha = if (state.isStartPage) 0f else 1f
+                        if (geckoViewInstance != view) {
+                            geckoViewInstance = view
+                        }
+                        val targetAlpha = if (state.isStartPage) 0f else 1f
+                        if (view.alpha != targetAlpha) {
+                            view.alpha = targetAlpha
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -290,7 +299,7 @@ fun BrowserScreen(
                 exit = fadeOut(tween(110, easing = FastOutSlowInEasing)),
                 modifier = Modifier.fillMaxSize()
             ) {
-                AppleStartPage(
+                StartPage(
                     bookmarks = state.bookmarks,
                     searchEngine = state.searchEngine,
                     isUpdateAvailable = updateInfo.isAvailable,
@@ -309,8 +318,8 @@ fun BrowserScreen(
             }
         }
 
-        // Floating iOS 26 Safari / BitChord Liquid Glass Bottom Bar powered by AndroidLiquidGlass
-        AppleBottomBar(
+        // Floating Ben Browser Liquid Glass Bottom Bar
+        BenBottomBar(
             state = state,
             backdrop = backdrop,
             onBack = {
@@ -349,7 +358,7 @@ fun BrowserScreen(
         )
     }
 
-    // Apple Safari Bookmarks & Page Menu Modal Sheet
+    // Bookmarks & Favorites Modal Sheet
     if (state.showBookmarksSheet) {
         BookmarksSheet(
             bookmarks = state.bookmarks,
@@ -373,7 +382,7 @@ fun BrowserScreen(
         )
     }
 
-    // Settings & Quick Add (+) Modal Sheet
+    // Settings Modal Sheet
     if (state.showSettingsSheet) {
         SettingsSheet(
             searchEngine = state.searchEngine,
